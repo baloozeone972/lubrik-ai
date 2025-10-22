@@ -1,0 +1,644 @@
+# ============================================================================
+# FICHIER: Dockerfile
+# Description: Image Docker multi-stage pour le service
+# ============================================================================
+
+# Stage 1: Build
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+
+# Copier les fichiers de configuration Maven
+COPY pom.xml .
+COPY src ./src
+
+# Build l'application (skip tests pour accélérer)
+RUN mvn clean package -DskipTests
+
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Créer un utilisateur non-root pour la sécurité
+RUN addgroup -g 1001 nexusai && \
+    adduser -D -u 1001 -G nexusai nexusai
+
+# Copier le JAR depuis le stage de build
+COPY --from=build /app/target/companion-service-1.0.0.jar app.jar
+
+# Changer le propriétaire
+RUN chown -R nexusai:nexusai /app
+
+# Passer à l'utilisateur non-root
+USER nexusai
+
+# Exposer le port
+EXPOSE 8083
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8083/actuator/health || exit 1
+
+# Variables d'environnement par défaut
+ENV JAVA_OPTS="-Xms512m -Xmx1024m" \
+    SPRING_PROFILES_ACTIVE="prod"
+
+# Commande de démarrage
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# ============================================================================
+# FICHIER: docker-compose.yml
+# Description: Orchestration complète des services
+# ============================================================================
+
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # MongoDB
+  mongodb:
+    image: mongo:7.0
+    container_name: nexusai-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: nexusai
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: nexusai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Zookeeper (requis pour Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: nexusai-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - nexusai-network
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: nexusai-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server=localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: nexusai-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    networks:
+      - nexusai-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Companion Service
+  companion-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexusai-companion-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MONGODB_URI: mongodb://admin:admin123@mongodb:27017/nexusai?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin123
+      S3_BUCKET: nexusai-companions
+      JAVA_OPTS: -Xms512m -Xmx1024m
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+networks:
+  nexusai-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  minio_data:
+
+# ============================================================================
+# FICHIER: scripts/mongo-init.js
+# Description: Script d'initialisation MongoDB
+# ============================================================================
+
+// scripts/mongo-init.js
+
+// Créer la base de données
+db = db.getSiblingDB('nexusai');
+
+// Créer les collections
+db.createCollection('companions');
+db.createCollection('companion_templates');
+db.createCollection('companion_likes');
+
+// Créer les index
+db.companions.createIndex({ userId: 1 });
+db.companions.createIndex({ name: 1 });
+db.companions.createIndex({ isPublic: 1, likeCount: -1 });
+db.companions.createIndex({ 'geneticProfile.frozen': 1, lastEvolutionDate: 1 });
+
+db.companion_templates.createIndex({ category: 1 });
+db.companion_templates.createIndex({ tags: 1 });
+db.companion_templates.createIndex({ usageCount: -1 });
+
+db.companion_likes.createIndex({ companionId: 1, userId: 1 }, { unique: true });
+
+print('✅ Base de données initialisée avec succès');
+
+// Insérer quelques templates d'exemple
+db.companion_templates.insertMany([
+  {
+    name: "Luna la Créative",
+    description: "Compagnon artistique et empathique",
+    category: "REALISTIC",
+    tags: ["creative", "empathetic", "artistic"],
+    thumbnailUrl: "https://example.com/luna.jpg",
+    defaultAppearance: {
+      gender: "FEMALE",
+      hairColor: "BLONDE",
+      eyeColor: "BLUE",
+      skinTone: "FAIR",
+      bodyType: "ATHLETIC",
+      age: 25
+    },
+    defaultPersonality: {
+      traits: {
+        openness: 85,
+        conscientiousness: 70,
+        extraversion: 75,
+        agreeableness: 85,
+        neuroticism: 30,
+        humor: 70,
+        empathy: 90,
+        jealousy: 20,
+        curiosity: 85,
+        confidence: 75,
+        playfulness: 80,
+        assertiveness: 65,
+        sensitivity: 75,
+        rationality: 60,
+        creativity: 90,
+        loyalty: 85,
+        independence: 55,
+        patience: 70,
+        adventurousness: 75,
+        romanticism: 80
+      },
+      interests: ["art", "music", "literature"],
+      dislikes: ["violence", "dishonesty"],
+      humorStyle: "WITTY",
+      communicationStyle: "WARM"
+    },
+    defaultVoice: {
+      voiceId: "voice-001",
+      pitch: 1.0,
+      speed: 1.0,
+      style: "FRIENDLY"
+    },
+    suggestedBackstory: "Luna est une âme créative qui trouve la beauté dans les détails du quotidien.",
+    usageCount: 0,
+    averageRating: 0
+  },
+  {
+    name: "Atlas le Sage",
+    description: "Compagnon rationnel et loyal",
+    category: "REALISTIC",
+    tags: ["wise", "rational", "loyal"],
+    thumbnailUrl: "https://example.com/atlas.jpg",
+    defaultAppearance: {
+      gender: "MALE",
+      hairColor: "BROWN",
+      eyeColor: "GREEN",
+      skinTone: "MEDIUM",
+      bodyType: "AVERAGE",
+      age: 35
+    },
+    defaultPersonality: {
+      traits: {
+        openness: 75,
+        conscientiousness: 90,
+        extraversion: 50,
+        agreeableness: 80,
+        neuroticism: 25,
+        humor: 60,
+        empathy: 75,
+        jealousy: 15,
+        curiosity: 80,
+        confidence: 85,
+        playfulness: 45,
+        assertiveness: 80,
+        sensitivity: 60,
+        rationality: 95,
+        creativity: 70,
+        loyalty: 95,
+        independence: 75,
+        patience: 90,
+        adventurousness: 55,
+        romanticism: 50
+      },
+      interests: ["philosophy", "science", "strategy"],
+      dislikes: ["chaos", "impulsiveness"],
+      humorStyle: "DRY",
+      communicationStyle: "DIRECT"
+    },
+    defaultVoice: {
+      voiceId: "voice-002",
+      pitch: 0.9,
+      speed: 0.95,
+      style: "CALM"
+    },
+    suggestedBackstory: "Atlas est un esprit analytique qui cherche la vérité et la sagesse.",
+    usageCount: 0,
+    averageRating: 0
+  }
+]);
+
+print('✅ Templates d\'exemple insérés');
+
+// ============================================================================
+# FICHIER: scripts/init-minio.sh
+# Description: Script d'initialisation MinIO
+# ============================================================================
+
+#!/bin/bash
+# scripts/init-minio.sh
+
+echo "🚀 Initialisation de MinIO..."
+
+# Attendre que MinIO soit prêt
+until curl -f http://localhost:9000/minio/health/live; do
+  echo "⏳ Attente de MinIO..."
+  sleep 2
+done
+
+echo "✅ MinIO est prêt"
+
+# Configuration du client mc
+mc alias set local http://localhost:9000 minioadmin minioadmin123
+
+# Créer le bucket
+mc mb local/nexusai-companions
+
+# Configurer les politiques
+mc anonymous set download local/nexusai-companions
+
+echo "✅ Bucket créé et configuré"
+
+# ============================================================================
+# FICHIER: scripts/deploy.sh
+# Description: Script de déploiement automatisé
+# ============================================================================
+
+#!/bin/bash
+# scripts/deploy.sh
+
+set -e
+
+echo "🚀 Démarrage du déploiement de Companion Service"
+
+# Variables
+VERSION="1.0.0"
+IMAGE_NAME="nexusai/companion-service"
+DOCKER_REGISTRY="registry.nexusai.com"
+
+# Étape 1: Tests
+echo "📋 Exécution des tests..."
+mvn clean test
+
+# Étape 2: Build
+echo "🔨 Build de l'application..."
+mvn clean package -DskipTests
+
+# Étape 3: Build Docker
+echo "🐳 Construction de l'image Docker..."
+docker build -t ${IMAGE_NAME}:${VERSION} .
+docker tag ${IMAGE_NAME}:${VERSION} ${IMAGE_NAME}:latest
+
+# Étape 4: Push vers le registry (optionnel)
+if [ "$1" == "--push" ]; then
+  echo "📤 Push vers le registry..."
+  docker tag ${IMAGE_NAME}:${VERSION} ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}
+  docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}
+  docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:latest
+fi
+
+# Étape 5: Démarrage avec Docker Compose
+echo "🚀 Démarrage des services..."
+docker-compose down
+docker-compose up -d
+
+# Attendre que les services soient prêts
+echo "⏳ Attente de la disponibilité des services..."
+sleep 30
+
+# Health check
+echo "🏥 Vérification de la santé..."
+curl -f http://localhost:8083/actuator/health || {
+  echo "❌ Le service n'est pas sain"
+  docker-compose logs companion-service
+  exit 1
+}
+
+echo "✅ Déploiement réussi!"
+echo "📊 Swagger UI: http://localhost:8083/swagger-ui.html"
+echo "🔍 Actuator: http://localhost:8083/actuator"
+echo "🗄️  MinIO Console: http://localhost:9001"
+
+# ============================================================================
+# FICHIER: .gitignore
+# Description: Fichiers à ignorer par Git
+# ============================================================================
+
+# .gitignore
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Application
+application-local.yml
+application-dev.yml
+
+# Docker
+.env
+
+# ============================================================================
+# FICHIER: Makefile
+# Description: Commandes utiles pour le développement
+# ============================================================================
+
+# Makefile
+
+.PHONY: help build test run stop clean deploy
+
+help:
+	@echo "📚 Commandes disponibles:"
+	@echo "  make build     - Compiler l'application"
+	@echo "  make test      - Exécuter les tests"
+	@echo "  make run       - Démarrer l'application"
+	@echo "  make stop      - Arrêter l'application"
+	@echo "  make clean     - Nettoyer les artifacts"
+	@echo "  make deploy    - Déployer avec Docker Compose"
+	@echo "  make logs      - Voir les logs"
+
+build:
+	@echo "🔨 Build de l'application..."
+	mvn clean package -DskipTests
+
+test:
+	@echo "🧪 Exécution des tests..."
+	mvn test
+
+test-coverage:
+	@echo "📊 Génération du rapport de couverture..."
+	mvn jacoco:report
+	@echo "✅ Rapport disponible: target/site/jacoco/index.html"
+
+run:
+	@echo "🚀 Démarrage de l'application..."
+	mvn spring-boot:run
+
+run-docker:
+	@echo "🐳 Démarrage avec Docker Compose..."
+	docker-compose up -d
+	@echo "⏳ Attente de l'initialisation..."
+	@sleep 20
+	@echo "✅ Application démarrée!"
+	@echo "📊 Swagger: http://localhost:8083/swagger-ui.html"
+
+stop:
+	@echo "🛑 Arrêt de l'application..."
+	docker-compose down
+
+clean:
+	@echo "🧹 Nettoyage..."
+	mvn clean
+	docker-compose down -v
+
+logs:
+	@echo "📋 Logs de l'application..."
+	docker-compose logs -f companion-service
+
+deploy:
+	@echo "🚀 Déploiement..."
+	./scripts/deploy.sh
+
+# ============================================================================
+# FICHIER: kubernetes/deployment.yaml
+# Description: Configuration Kubernetes
+# ============================================================================
+
+# kubernetes/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: companion-service
+  namespace: nexusai
+  labels:
+    app: companion-service
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: companion-service
+  template:
+    metadata:
+      labels:
+        app: companion-service
+        version: v1
+    spec:
+      containers:
+      - name: companion-service
+        image: registry.nexusai.com/companion-service:1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8083
+          name: http
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: companion-secrets
+              key: mongodb-uri
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-service:9092"
+        - name: JAVA_OPTS
+          value: "-Xms512m -Xmx1024m"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8083
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: companion-service
+  namespace: nexusai
+spec:
+  type: ClusterIP
+  selector:
+    app: companion-service
+  ports:
+  - port: 8083
+    targetPort: 8083
+    protocol: TCP
+    name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: companion-service-hpa
+  namespace: nexusai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: companion-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

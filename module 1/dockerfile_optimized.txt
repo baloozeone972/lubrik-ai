@@ -1,0 +1,282 @@
+# ══════════════════════════════════════════════════════════════════════
+# Multi-Stage Dockerfile pour NexusAI Auth Service
+# Optimisé pour la production avec layers cachés et image finale minimale
+# ══════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────
+# STAGE 1 : Build avec Maven
+# ─────────────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+
+LABEL maintainer="NexusAI Team <support@nexusai.com>"
+LABEL description="NexusAI Authentication Service - Build Stage"
+
+# Créer le répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers POM pour le caching des dépendances
+COPY pom.xml .
+COPY nexus-core/pom.xml nexus-core/
+COPY nexus-auth/pom.xml nexus-auth/
+
+# Télécharger les dépendances (cette layer sera cachée)
+RUN mvn dependency:go-offline -B
+
+# Copier le code source
+COPY nexus-core/src nexus-core/src
+COPY nexus-auth/src nexus-auth/src
+
+# Compiler et packager (skip tests pour build plus rapide)
+RUN mvn clean package -DskipTests -B
+
+# Extraire le JAR pour optimiser les layers Docker
+RUN mkdir -p nexus-auth/target/dependency && \
+    cd nexus-auth/target/dependency && \
+    jar -xf ../*.jar
+
+# ─────────────────────────────────────────────────────────────────────
+# STAGE 2 : Image finale minimale
+# ─────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine
+
+LABEL maintainer="NexusAI Team <support@nexusai.com>"
+LABEL description="NexusAI Authentication Service - Production"
+LABEL version="1.0.0"
+
+# Installer des utilitaires nécessaires
+RUN apk add --no-cache \
+    curl \
+    tini \
+    && rm -rf /var/cache/apk/*
+
+# Créer un utilisateur non-root pour la sécurité
+RUN addgroup -g 1001 nexusai && \
+    adduser -D -u 1001 -G nexusai nexusai
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /app/logs && \
+    chown -R nexusai:nexusai /app
+
+WORKDIR /app
+
+# Copier l'application depuis le stage de build
+ARG DEPENDENCY=/app/nexus-auth/target/dependency
+COPY --from=builder ${DEPENDENCY}/BOOT-INF/lib ./lib
+COPY --from=builder ${DEPENDENCY}/META-INF ./META-INF
+COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes .
+
+# Changer l'ownership
+RUN chown -R nexusai:nexusai /app
+
+# Passer à l'utilisateur non-root
+USER nexusai
+
+# Exposer le port
+EXPOSE 8081
+
+# Variables d'environnement par défaut
+ENV SPRING_PROFILES_ACTIVE=prod \
+    JAVA_OPTS="-XX:+UseContainerSupport \
+               -XX:MaxRAMPercentage=75.0 \
+               -XX:InitialRAMPercentage=50.0 \
+               -XX:+UseG1GC \
+               -XX:+UseStringDeduplication \
+               -XX:+OptimizeStringConcat \
+               -Djava.security.egd=file:/dev/./urandom"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8081/actuator/health || exit 1
+
+# Utiliser tini comme init system
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Commande de démarrage
+CMD java ${JAVA_OPTS} \
+    -cp .:lib/* \
+    com.nexusai.auth.NexusAuthApplication
+
+# ══════════════════════════════════════════════════════════════════════
+# .dockerignore - À créer à la racine du projet
+# ══════════════════════════════════════════════════════════════════════
+
+# Compiled class files
+**/target/
+**/*.class
+
+# Log files
+**/*.log
+**/logs/
+
+# Package Files
+**/*.jar
+**/*.war
+**/*.ear
+
+# IDE
+**/.idea/
+**/*.iml
+**/.vscode/
+**/.project
+**/.classpath
+**/.settings/
+
+# OS
+**/.DS_Store
+**/Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Documentation
+README.md
+docs/
+
+# Test files
+**/src/test/
+
+# ══════════════════════════════════════════════════════════════════════
+# docker-compose.prod.yml - Configuration production
+# ══════════════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  nexus-auth:
+    image: nexusai/nexus-auth:1.0.0
+    container_name: nexusai-auth-prod
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres:5432/nexusai_auth
+      DATABASE_USERNAME: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JAVA_OPTS: >
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=75.0
+        -XX:+UseG1GC
+        -Xlog:gc*:file=/app/logs/gc.log:time,uptime:filecount=5,filesize=10M
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - nexusai-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexusai-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexusai_auth
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d nexusai_auth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexusai-redis-prod
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+
+networks:
+  nexusai-network:
+    driver: bridge
+
+# ══════════════════════════════════════════════════════════════════════
+# Scripts de build et déploiement
+# ══════════════════════════════════════════════════════════════════════
+
+#!/bin/bash
+# build-docker.sh
+
+set -e
+
+echo "🐳 Building Docker image..."
+
+# Build l'image
+docker build -t nexusai/nexus-auth:latest .
+docker build -t nexusai/nexus-auth:1.0.0 .
+
+echo "✓ Docker image built successfully"
+
+# Tag pour le registry (si nécessaire)
+# docker tag nexusai/nexus-auth:1.0.0 registry.nexusai.com/nexus-auth:1.0.0
+
+echo "📦 Image size:"
+docker images nexusai/nexus-auth:latest
+
+# ──────────────────────────────────────────────────────────────────────
+
+#!/bin/bash
+# deploy-docker.sh
+
+set -e
+
+echo "🚀 Deploying NexusAI Auth Service..."
+
+# Pull les dernières images
+docker-compose -f docker-compose.prod.yml pull
+
+# Démarrer les services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Attendre que les services soient prêts
+echo "⏳ Waiting for services to be ready..."
+sleep 30
+
+# Vérifier la santé
+docker-compose -f docker-compose.prod.yml ps
+
+echo "✓ Deployment complete!"
+echo "Application: http://localhost:8081"

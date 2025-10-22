@@ -1,0 +1,605 @@
+# ═══════════════════════════════════════════════════════════════
+# MODULE 10 : ANALYTICS & MONITORING - DOCKERFILE
+# 
+# Multi-stage build pour optimiser la taille de l'image
+# ═══════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 1: Build
+# ═══════════════════════════════════════════════════════════════
+FROM maven:3.9-eclipse-temurin-21-alpine AS build
+
+LABEL maintainer="NexusAI Team <dev@nexusai.com>"
+LABEL description="Analytics & Monitoring Module for NexusAI"
+
+WORKDIR /app
+
+# Copier les fichiers de configuration Maven
+COPY pom.xml .
+COPY analytics-core/pom.xml analytics-core/
+COPY analytics-api/pom.xml analytics-api/
+COPY analytics-collector/pom.xml analytics-collector/
+COPY analytics-reporting/pom.xml analytics-reporting/
+COPY analytics-monitoring/pom.xml analytics-monitoring/
+
+# Télécharger les dépendances (layer cacheable)
+RUN mvn dependency:go-offline -B
+
+# Copier le code source
+COPY analytics-core/src analytics-core/src
+COPY analytics-api/src analytics-api/src
+COPY analytics-collector/src analytics-collector/src
+COPY analytics-reporting/src analytics-reporting/src
+COPY analytics-monitoring/src analytics-monitoring/src
+
+# Build du projet
+RUN mvn clean package -DskipTests -B
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 2: Runtime
+# ═══════════════════════════════════════════════════════════════
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Installer les dépendances système
+RUN apk add --no-cache \
+    curl \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+# Créer un utilisateur non-root
+RUN addgroup -g 1000 nexusai && \
+    adduser -D -u 1000 -G nexusai nexusai
+
+# Copier le JAR depuis le stage de build
+COPY --from=build /app/analytics-api/target/*.jar app.jar
+
+# Changer le propriétaire
+RUN chown nexusai:nexusai app.jar
+
+# Passer à l'utilisateur non-root
+USER nexusai
+
+# Exposer le port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# Variables d'environnement par défaut
+ENV JAVA_OPTS="-Xmx1g -Xms512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200" \
+    SPRING_PROFILES_ACTIVE="prod"
+
+# Point d'entrée
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+---
+
+# ═══════════════════════════════════════════════════════════════
+# KUBERNETES DEPLOYMENT
+# Fichier: k8s/deployment.yaml
+# ═══════════════════════════════════════════════════════════════
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexusai-analytics
+  namespace: nexusai
+  labels:
+    app: analytics
+    module: analytics
+    version: v1.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: analytics
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: analytics
+        module: analytics
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: nexusai-analytics
+      
+      # Affinity rules pour la haute disponibilité
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - analytics
+                topologyKey: kubernetes.io/hostname
+      
+      containers:
+        - name: analytics
+          image: nexusai/analytics:1.0.0
+          imagePullPolicy: IfNotPresent
+          
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "production"
+            
+            # ClickHouse
+            - name: CLICKHOUSE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: analytics-config
+                  key: clickhouse.url
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-secrets
+                  key: clickhouse.user
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-secrets
+                  key: clickhouse.password
+            
+            # Kafka
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: analytics-config
+                  key: kafka.bootstrap.servers
+            
+            # Redis
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: analytics-config
+                  key: redis.host
+            - name: REDIS_PORT
+              value: "6379"
+            
+            # Java Options
+            - name: JAVA_OPTS
+              value: "-Xmx2g -Xms1g -XX:+UseG1GC"
+          
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: logs
+              mountPath: /app/logs
+      
+      volumes:
+        - name: config
+          configMap:
+            name: analytics-config
+        - name: logs
+          emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: nexusai
+  labels:
+    app: analytics
+spec:
+  type: ClusterIP
+  selector:
+    app: analytics
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analytics-hpa
+  namespace: nexusai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexusai-analytics
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+
+---
+
+# ═══════════════════════════════════════════════════════════════
+# CONFIGMAP
+# ═══════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analytics-config
+  namespace: nexusai
+data:
+  clickhouse.url: "jdbc:clickhouse://clickhouse-service:8123/nexusai"
+  kafka.bootstrap.servers: "kafka-service:9092"
+  redis.host: "redis-service"
+  
+  application.yaml: |
+    spring:
+      application:
+        name: nexusai-analytics
+    
+    nexusai:
+      analytics:
+        collection:
+          batch-size: 1000
+          batch-timeout: 5000
+        retention:
+          raw-events: 90
+          aggregated: 365
+
+---
+
+# ═══════════════════════════════════════════════════════════════
+# SECRETS (à créer avec des valeurs réelles)
+# ═══════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: analytics-secrets
+  namespace: nexusai
+type: Opaque
+stringData:
+  clickhouse.user: "nexusai"
+  clickhouse.password: "CHANGE_ME"
+
+---
+
+# ═══════════════════════════════════════════════════════════════
+# SERVICE ACCOUNT
+# ═══════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexusai-analytics
+  namespace: nexusai
+
+---
+
+# ═══════════════════════════════════════════════════════════════
+# SERVICE MONITOR (Prometheus Operator)
+# ═══════════════════════════════════════════════════════════════
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: analytics-metrics
+  namespace: nexusai
+  labels:
+    app: analytics
+spec:
+  selector:
+    matchLabels:
+      app: analytics
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 30s
+
+---
+
+# ═══════════════════════════════════════════════════════════════
+# GUIDE DE DÉPLOIEMENT
+# ═══════════════════════════════════════════════════════════════
+
+# Module 10 : Analytics & Monitoring - Guide de Déploiement
+
+## 📦 Prérequis
+
+### Infrastructure
+- Kubernetes 1.25+
+- Helm 3.x
+- kubectl configuré
+
+### Services externes
+- ClickHouse (cluster ou instance unique)
+- Kafka (cluster 3+ brokers recommandé)
+- Redis (cluster ou standalone)
+- Prometheus Operator (pour le monitoring)
+
+### Ressources minimales
+- CPU : 500m par pod
+- RAM : 1Gi par pod
+- Storage : 100Gi pour ClickHouse
+
+## 🚀 Déploiement
+
+### 1. Créer le namespace
+
+```bash
+kubectl create namespace nexusai
+```
+
+### 2. Créer les secrets
+
+```bash
+# ClickHouse
+kubectl create secret generic analytics-secrets \
+  --from-literal=clickhouse.user=nexusai \
+  --from-literal=clickhouse.password=YOUR_PASSWORD \
+  -n nexusai
+
+# S3 (si utilisé)
+kubectl create secret generic s3-credentials \
+  --from-literal=access-key=YOUR_ACCESS_KEY \
+  --from-literal=secret-key=YOUR_SECRET_KEY \
+  -n nexusai
+```
+
+### 3. Appliquer les ConfigMaps
+
+```bash
+kubectl apply -f k8s/configmap.yaml
+```
+
+### 4. Déployer ClickHouse (si pas déjà présent)
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm install clickhouse bitnami/clickhouse \
+  --namespace nexusai \
+  --set auth.username=nexusai \
+  --set auth.password=YOUR_PASSWORD \
+  --set persistence.size=100Gi
+```
+
+### 5. Initialiser les tables ClickHouse
+
+```bash
+kubectl run clickhouse-init --rm -i --tty \
+  --image=clickhouse/clickhouse-client \
+  --restart=Never \
+  --namespace=nexusai \
+  -- clickhouse-client --host clickhouse-service \
+     --multiquery < sql/init-clickhouse.sql
+```
+
+### 6. Déployer l'application
+
+```bash
+# Build de l'image Docker
+docker build -t nexusai/analytics:1.0.0 .
+docker push nexusai/analytics:1.0.0
+
+# Déployer sur Kubernetes
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/hpa.yaml
+kubectl apply -f k8s/servicemonitor.yaml
+```
+
+### 7. Vérifier le déploiement
+
+```bash
+# Vérifier les pods
+kubectl get pods -n nexusai -l app=analytics
+
+# Vérifier les logs
+kubectl logs -f deployment/nexusai-analytics -n nexusai
+
+# Vérifier le service
+kubectl get svc analytics-service -n nexusai
+
+# Test de santé
+kubectl port-forward svc/analytics-service 8080:8080 -n nexusai
+curl http://localhost:8080/actuator/health
+```
+
+## 📊 Monitoring
+
+### Accès Grafana
+
+```bash
+kubectl port-forward svc/grafana 3000:3000 -n monitoring
+```
+
+Ouvrir http://localhost:3000 (admin/admin)
+
+### Dashboards recommandés
+
+1. **NexusAI Analytics Overview**
+   - Events processed/sec
+   - Buffer sizes
+   - Latency P95/P99
+   - Error rate
+
+2. **ClickHouse Performance**
+   - Query duration
+   - Disk usage
+   - Memory usage
+   - Active queries
+
+3. **Kafka Metrics**
+   - Consumer lag
+   - Messages/sec
+   - Partition distribution
+
+## 🔒 Sécurité
+
+### Network Policies
+
+```bash
+kubectl apply -f k8s/networkpolicy.yaml
+```
+
+### RBAC
+
+```bash
+kubectl apply -f k8s/rbac.yaml
+```
+
+## 📈 Scaling
+
+### Scaling manuel
+
+```bash
+# Augmenter le nombre de replicas
+kubectl scale deployment nexusai-analytics --replicas=5 -n nexusai
+```
+
+### Autoscaling
+
+L'HPA est configuré pour scaler automatiquement entre 3 et 10 replicas
+basé sur l'utilisation CPU (70%) et mémoire (80%).
+
+## 🔄 Mises à jour
+
+### Rolling Update
+
+```bash
+# Nouvelle version
+kubectl set image deployment/nexusai-analytics \
+  analytics=nexusai/analytics:1.1.0 \
+  -n nexusai
+
+# Vérifier le rollout
+kubectl rollout status deployment/nexusai-analytics -n nexusai
+```
+
+### Rollback
+
+```bash
+kubectl rollout undo deployment/nexusai-analytics -n nexusai
+```
+
+## 🧪 Tests de charge
+
+```bash
+# Utiliser k6 ou Gatling
+k6 run loadtest.js --vus 1000 --duration 5m
+```
+
+## 📝 Logs
+
+### Centralisation des logs (ELK Stack)
+
+```bash
+# Installer Filebeat
+kubectl apply -f k8s/filebeat.yaml
+
+# Vérifier dans Kibana
+# Index pattern: nexusai-analytics-*
+```
+
+## 🚨 Troubleshooting
+
+### Problème : Pods en CrashLoopBackOff
+
+```bash
+# Vérifier les logs
+kubectl logs nexusai-analytics-xxx -n nexusai --previous
+
+# Vérifier les événements
+kubectl describe pod nexusai-analytics-xxx -n nexusai
+
+# Causes communes:
+# - Connexion ClickHouse échouée
+# - Connexion Kafka échouée
+# - Mémoire insuffisante
+```
+
+### Problème : Haute latence
+
+```bash
+# Vérifier les métriques
+kubectl top pods -n nexusai
+
+# Vérifier HPA
+kubectl get hpa -n nexusai
+
+# Augmenter les ressources si nécessaire
+kubectl edit deployment nexusai-analytics -n nexusai
+```
+
+## 📞 Support
+
+- Documentation : https://docs.nexusai.com/analytics
+- Issues : https://github.com/nexusai/analytics/issues
+- Email : support@nexusai.com

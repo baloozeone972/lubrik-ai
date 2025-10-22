@@ -1,0 +1,132 @@
+# ============================================================================
+# STRUCTURE COMPLÈTE DES FICHIERS - MODULE 3 COMPANION SERVICE
+# ============================================================================
+
+## Racine du Projet
+companion-service/
+
+### Configuration Maven
+pom.xml
+
+### Configuration Application
+src/main/resources/application.yml
+src/main/resources/application-dev.yml
+src/main/resources/application-prod.yml
+src/main/resources/logback-spring.xml
+
+### Classe Principale
+src/main/java/com/nexusai/companion/CompanionServiceApplication.java
+
+### Domain (Entités)
+src/main/java/com/nexusai/companion/domain/Companion.java
+src/main/java/com/nexusai/companion/domain/CompanionTemplate.java
+src/main/java/com/nexusai/companion/domain/CompanionLike.java
+
+### DTOs (Data Transfer Objects)
+src/main/java/com/nexusai/companion/dto/CreateCompanionRequest.java
+src/main/java/com/nexusai/companion/dto/UpdateCompanionRequest.java
+src/main/java/com/nexusai/companion/dto/CompanionResponse.java
+src/main/java/com/nexusai/companion/dto/AppearanceDto.java
+src/main/java/com/nexusai/companion/dto/PersonalityDto.java
+src/main/java/com/nexusai/companion/dto/TraitsDto.java
+src/main/java/com/nexusai/companion/dto/VoiceDto.java
+src/main/java/com/nexusai/companion/dto/GeneticProfileDto.java
+src/main/java/com/nexusai/companion/dto/EmotionalStateDto.java
+src/main/java/com/nexusai/companion/dto/EvolveCompanionRequest.java
+src/main/java/com/nexusai/companion/dto/FreezeTraitsRequest.java
+src/main/java/com/nexusai/companion/dto/MergeCompanionsRequest.java
+src/main/java/com/nexusai/companion/dto/MergeResult.java
+src/main/java/com/nexusai/companion/dto/PublicCompanionsResponse.java
+src/main/java/com/nexusai/companion/dto/CompanionSummary.java
+
+### Repositories
+src/main/java/com/nexusai/companion/repository/CompanionRepository.java
+src/main/java/com/nexusai/companion/repository/CompanionTemplateRepository.java
+src/main/java/com/nexusai/companion/repository/CompanionLikeRepository.java
+src/main/java/com/nexusai/companion/repository/CustomCompanionRepository.java
+src/main/java/com/nexusai/companion/repository/CustomCompanionRepositoryImpl.java
+
+### Services
+src/main/java/com/nexusai/companion/service/CompanionService.java
+src/main/java/com/nexusai/companion/service/GeneticService.java
+src/main/java/com/nexusai/companion/service/EvolutionService.java
+src/main/java/com/nexusai/companion/service/TemplateService.java
+src/main/java/com/nexusai/companion/service/LikeService.java
+src/main/java/com/nexusai/companion/service/QuotaService.java
+src/main/java/com/nexusai/companion/service/StorageService.java
+src/main/java/com/nexusai/companion/service/EventPublisherService.java
+
+### Controllers
+src/main/java/com/nexusai/companion/controller/CompanionController.java
+src/main/java/com/nexusai/companion/controller/CompanionEvolutionController.java
+src/main/java/com/nexusai/companion/controller/CompanionTemplateController.java
+src/main/java/com/nexusai/companion/controller/CompanionLikeController.java
+
+### Exceptions
+src/main/java/com/nexusai/companion/exception/CompanionNotFoundException.java
+src/main/java/com/nexusai/companion/exception/QuotaExceededException.java
+src/main/java/com/nexusai/companion/exception/DuplicateNameException.java
+src/main/java/com/nexusai/companion/exception/UnauthorizedException.java
+src/main/java/com/nexusai/companion/exception/GlobalExceptionHandler.java
+
+### Mapper
+src/main/java/com/nexusai/companion/mapper/CompanionMapper.java
+
+### Configuration
+src/main/java/com/nexusai/companion/config/SecurityConfig.java
+src/main/java/com/nexusai/companion/config/MetricsConfig.java
+src/main/java/com/nexusai/companion/config/CompanionMetrics.java
+
+### Aspects
+src/main/java/com/nexusai/companion/aspect/MetricsAspect.java
+src/main/java/com/nexusai/companion/aspect/LoggingAspect.java
+
+### Scheduler
+src/main/java/com/nexusai/companion/scheduler/ScheduledTasks.java
+
+### Events
+src/main/java/com/nexusai/companion/event/CompanionEvent.java
+src/main/java/com/nexusai/companion/event/EventListenerService.java
+
+### Tests Unitaires
+src/test/java/com/nexusai/companion/service/CompanionServiceTest.java
+src/test/java/com/nexusai/companion/service/GeneticServiceTest.java
+
+### Docker & Kubernetes
+Dockerfile
+docker-compose.yml
+.dockerignore
+kubernetes/deployment.yaml
+kubernetes/service.yaml
+kubernetes/hpa.yaml
+
+### Scripts
+scripts/mongo-init.js
+scripts/init-minio.sh
+scripts/deploy.sh
+scripts/integration-test.sh
+
+### Monitoring
+monitoring/prometheus.yml
+monitoring/alerts.yml
+monitoring/grafana/dashboard.json
+
+### Client Examples
+client-examples/javascript/companion-client.js
+client-examples/usage-example.js
+
+### Tests
+tests/load-test.js
+tests/integration-test.sh
+
+### Postman
+postman/NexusAI-Companion.postman_collection.json
+
+### Documentation
+README.md
+.gitignore
+Makefile
+
+# ============================================================================
+# TOTAL: 70+ fichiers
+# ============================================================================

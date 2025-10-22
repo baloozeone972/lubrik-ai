@@ -1,0 +1,2572 @@
+# MODULE USER NEXUSAI - AUTHENTIFICATION COMPLÈTE
+
+## 📁 STRUCTURE DU PROJET
+
+```
+nexus-ai-parent/
+│
+├── pom.xml                                    # ./pom.xml
+│
+├── nexus-core/                                # ./nexus-core/
+│   ├── pom.xml                                # ./nexus-core/pom.xml
+│   └── src/
+│       └── main/
+│           └── java/com/nexusai/core/
+│               ├── domain/                    # ./nexus-core/src/main/java/com/nexusai/core/domain/
+│               │   ├── User.java
+│               │   ├── Subscription.java
+│               │   └── TokenWallet.java
+│               ├── enums/                     # ./nexus-core/src/main/java/com/nexusai/core/enums/
+│               │   ├── UserRole.java
+│               │   └── SubscriptionPlan.java
+│               └── exception/                 # ./nexus-core/src/main/java/com/nexusai/core/exception/
+│                   ├── ResourceNotFoundException.java
+│                   ├── UnauthorizedException.java
+│                   └── ErrorResponse.java
+│
+└── nexus-auth/                                # ./nexus-auth/
+    ├── pom.xml                                # ./nexus-auth/pom.xml
+    └── src/
+        ├── main/
+        │   ├── java/com/nexusai/auth/
+        │   │   ├── NexusAuthApplication.java # ./nexus-auth/src/main/java/com/nexusai/auth/NexusAuthApplication.java
+        │   │   │
+        │   │   ├── config/                    # ./nexus-auth/src/main/java/com/nexusai/auth/config/
+        │   │   │   ├── SecurityConfig.java
+        │   │   │   ├── JwtConfig.java
+        │   │   │   ├── CorsConfig.java
+        │   │   │   └── OpenApiConfig.java
+        │   │   │
+        │   │   ├── controller/                # ./nexus-auth/src/main/java/com/nexusai/auth/controller/
+        │   │   │   ├── AuthController.java
+        │   │   │   ├── UserController.java
+        │   │   │   └── SubscriptionController.java
+        │   │   │
+        │   │   ├── dto/                       # ./nexus-auth/src/main/java/com/nexusai/auth/dto/
+        │   │   │   ├── request/
+        │   │   │   │   ├── RegistrationRequest.java
+        │   │   │   │   ├── LoginRequest.java
+        │   │   │   │   ├── RefreshTokenRequest.java
+        │   │   │   │   └── UpdateUserRequest.java
+        │   │   │   └── response/
+        │   │   │       ├── AuthResponse.java
+        │   │   │       ├── UserResponse.java
+        │   │   │       └── TokenResponse.java
+        │   │   │
+        │   │   ├── repository/                # ./nexus-auth/src/main/java/com/nexusai/auth/repository/
+        │   │   │   ├── UserRepository.java
+        │   │   │   ├── TokenWalletRepository.java
+        │   │   │   └── SubscriptionRepository.java
+        │   │   │
+        │   │   ├── service/                   # ./nexus-auth/src/main/java/com/nexusai/auth/service/
+        │   │   │   ├── AuthService.java
+        │   │   │   ├── UserService.java
+        │   │   │   ├── TokenService.java
+        │   │   │   ├── SubscriptionService.java
+        │   │   │   └── impl/
+        │   │   │       ├── AuthServiceImpl.java
+        │   │   │       ├── UserServiceImpl.java
+        │   │   │       ├── TokenServiceImpl.java
+        │   │   │       └── SubscriptionServiceImpl.java
+        │   │   │
+        │   │   ├── security/                  # ./nexus-auth/src/main/java/com/nexusai/auth/security/
+        │   │   │   ├── JwtTokenProvider.java
+        │   │   │   ├── JwtAuthenticationFilter.java
+        │   │   │   ├── CustomUserDetails.java
+        │   │   │   └── CustomUserDetailsService.java
+        │   │   │
+        │   │   ├── mapper/                    # ./nexus-auth/src/main/java/com/nexusai/auth/mapper/
+        │   │   │   └── UserMapper.java
+        │   │   │
+        │   │   └── exception/                 # ./nexus-auth/src/main/java/com/nexusai/auth/exception/
+        │   │       └── GlobalExceptionHandler.java
+        │   │
+        │   └── resources/
+        │       ├── application.yml            # ./nexus-auth/src/main/resources/application.yml
+        │       ├── application-dev.yml        # ./nexus-auth/src/main/resources/application-dev.yml
+        │       └── application-prod.yml       # ./nexus-auth/src/main/resources/application-prod.yml
+        │
+        └── test/
+            └── java/com/nexusai/auth/
+                ├── controller/                # ./nexus-auth/src/test/java/com/nexusai/auth/controller/
+                │   └── AuthControllerTest.java
+                ├── service/                   # ./nexus-auth/src/test/java/com/nexusai/auth/service/
+                │   └── UserServiceTest.java
+                └── security/                  # ./nexus-auth/src/test/java/com/nexusai/auth/security/
+                    └── JwtTokenProviderTest.java
+```
+
+---
+
+## 📄 FICHIERS DU MODULE
+
+### 1. Parent POM
+**Chemin:** `./pom.xml`
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <groupId>com.nexusai</groupId>
+    <artifactId>nexus-ai-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+    </parent>
+    
+    <modules>
+        <module>nexus-core</module>
+        <module>nexus-auth</module>
+    </modules>
+    
+    <properties>
+        <java.version>21</java.version>
+        <jwt.version>0.12.3</jwt.version>
+        <lombok.version>1.18.30</lombok.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <springdoc.version>2.3.0</springdoc.version>
+    </properties>
+    
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jwt.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
+```
+
+---
+
+### 2. Module Core POM
+**Chemin:** `./nexus-core/pom.xml`
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>com.nexusai</groupId>
+        <artifactId>nexus-ai-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    
+    <artifactId>nexus-core</artifactId>
+    <name>NexusAI Core</name>
+    
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+---
+
+### 3. Entités Core
+
+#### 3.1 User Entity
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/domain/User.java`
+
+```java
+package com.nexusai.core.domain;
+
+import com.nexusai.core.enums.UserRole;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Entité représentant un utilisateur de la plateforme NexusAI.
+ * 
+ * @author NexusAI Team
+ * @version 1.0
+ * @since 1.0
+ */
+@Entity
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_email", columnList = "email"),
+    @Index(name = "idx_users_username", columnList = "username")
+})
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class User {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+    
+    @Column(unique = true, nullable = false, length = 255)
+    private String email;
+    
+    @Column(unique = true, nullable = false, length = 100)
+    private String username;
+    
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
+    
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private UserRole role = UserRole.USER;
+    
+    @Column(name = "email_verified")
+    @Builder.Default
+    private Boolean emailVerified = false;
+    
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean active = true;
+    
+    @Column(name = "failed_login_attempts")
+    @Builder.Default
+    private Integer failedLoginAttempts = 0;
+    
+    @Column(name = "account_locked")
+    @Builder.Default
+    private Boolean accountLocked = false;
+    
+    @Column(name = "lock_time")
+    private LocalDateTime lockTime;
+    
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Subscription subscription;
+    
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private TokenWallet tokenWallet;
+    
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+    
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+    
+    @Column(name = "last_login")
+    private LocalDateTime lastLogin;
+    
+    /**
+     * Méthode utilitaire pour initialiser les relations.
+     */
+    @PrePersist
+    public void prePersist() {
+        if (subscription == null) {
+            subscription = Subscription.builder()
+                .user(this)
+                .build();
+        }
+        if (tokenWallet == null) {
+            tokenWallet = TokenWallet.builder()
+                .user(this)
+                .balance(100) // Jetons de bienvenue
+                .totalEarned(100)
+                .totalSpent(0)
+                .build();
+        }
+    }
+}
+```
+
+#### 3.2 Subscription Entity
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/domain/Subscription.java`
+
+```java
+package com.nexusai.core.domain;
+
+import com.nexusai.core.enums.SubscriptionPlan;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Entité représentant un abonnement utilisateur.
+ */
+@Entity
+@Table(name = "subscriptions")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Subscription {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+    
+    @OneToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private SubscriptionPlan plan = SubscriptionPlan.FREE;
+    
+    @Column(name = "start_date", nullable = false)
+    @Builder.Default
+    private LocalDateTime startDate = LocalDateTime.now();
+    
+    @Column(name = "end_date")
+    private LocalDateTime endDate;
+    
+    @Column(name = "auto_renewal")
+    @Builder.Default
+    private Boolean autoRenewal = false;
+    
+    @Column(name = "monthly_price", precision = 10, scale = 2)
+    private BigDecimal monthlyPrice;
+    
+    @Column(name = "stripe_subscription_id")
+    private String stripeSubscriptionId;
+    
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+    
+    /**
+     * Vérifie si l'abonnement est actif.
+     */
+    public boolean isActive() {
+        if (plan == SubscriptionPlan.FREE) {
+            return true;
+        }
+        return endDate == null || LocalDateTime.now().isBefore(endDate);
+    }
+}
+```
+
+#### 3.3 TokenWallet Entity
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/domain/TokenWallet.java`
+
+```java
+package com.nexusai.core.domain;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Entité représentant le portefeuille de jetons d'un utilisateur.
+ */
+@Entity
+@Table(name = "token_wallets")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TokenWallet {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+    
+    @OneToOne
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    private User user;
+    
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer balance = 0;
+    
+    @Column(name = "total_earned", nullable = false)
+    @Builder.Default
+    private Integer totalEarned = 0;
+    
+    @Column(name = "total_spent", nullable = false)
+    @Builder.Default
+    private Integer totalSpent = 0;
+    
+    @Column(name = "last_daily_bonus")
+    private LocalDateTime lastDailyBonus;
+    
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+    
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+    
+    /**
+     * Consomme des jetons.
+     * 
+     * @param amount Nombre de jetons à consommer
+     * @return true si succès, false si solde insuffisant
+     */
+    public boolean consume(int amount) {
+        if (balance < amount) {
+            return false;
+        }
+        balance -= amount;
+        totalSpent += amount;
+        return true;
+    }
+    
+    /**
+     * Ajoute des jetons.
+     * 
+     * @param amount Nombre de jetons à ajouter
+     */
+    public void add(int amount) {
+        balance += amount;
+        totalEarned += amount;
+    }
+}
+```
+
+---
+
+### 4. Enums
+
+#### 4.1 UserRole
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/enums/UserRole.java`
+
+```java
+package com.nexusai.core.enums;
+
+/**
+ * Rôles utilisateur dans l'application.
+ */
+public enum UserRole {
+    USER,
+    MODERATOR,
+    ADMIN
+}
+```
+
+#### 4.2 SubscriptionPlan
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/enums/SubscriptionPlan.java`
+
+```java
+package com.nexusai.core.enums;
+
+import java.math.BigDecimal;
+
+/**
+ * Plans d'abonnement disponibles.
+ */
+public enum SubscriptionPlan {
+    FREE(BigDecimal.ZERO, 100, 1),
+    STANDARD(new BigDecimal("9.99"), 1000, 3),
+    PREMIUM(new BigDecimal("19.99"), -1, 10),
+    VIP(new BigDecimal("49.99"), -1, -1),
+    VIP_PLUS(new BigDecimal("69.99"), -1, -1);
+    
+    private final BigDecimal monthlyPrice;
+    private final int monthlyMessages; // -1 = illimité
+    private final int maxCompanions; // -1 = illimité
+    
+    SubscriptionPlan(BigDecimal monthlyPrice, int monthlyMessages, int maxCompanions) {
+        this.monthlyPrice = monthlyPrice;
+        this.monthlyMessages = monthlyMessages;
+        this.maxCompanions = maxCompanions;
+    }
+    
+    public BigDecimal getMonthlyPrice() {
+        return monthlyPrice;
+    }
+    
+    public int getMonthlyMessages() {
+        return monthlyMessages;
+    }
+    
+    public int getMaxCompanions() {
+        return maxCompanions;
+    }
+    
+    public boolean hasUnlimitedMessages() {
+        return monthlyMessages == -1;
+    }
+    
+    public boolean hasUnlimitedCompanions() {
+        return maxCompanions == -1;
+    }
+}
+```
+
+---
+
+### 5. Exceptions Core
+
+#### 5.1 ResourceNotFoundException
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/exception/ResourceNotFoundException.java`
+
+```java
+package com.nexusai.core.exception;
+
+/**
+ * Exception levée quand une ressource n'est pas trouvée.
+ */
+public class ResourceNotFoundException extends RuntimeException {
+    
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+    
+    public ResourceNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+```
+
+#### 5.2 UnauthorizedException
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/exception/UnauthorizedException.java`
+
+```java
+package com.nexusai.core.exception;
+
+/**
+ * Exception levée pour les problèmes d'authentification.
+ */
+public class UnauthorizedException extends RuntimeException {
+    
+    public UnauthorizedException(String message) {
+        super(message);
+    }
+    
+    public UnauthorizedException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+```
+
+#### 5.3 ErrorResponse
+**Chemin:** `./nexus-core/src/main/java/com/nexusai/core/exception/ErrorResponse.java`
+
+```java
+package com.nexusai.core.exception;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+/**
+ * Réponse d'erreur standardisée.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ErrorResponse {
+    private String code;
+    private String message;
+    private LocalDateTime timestamp;
+    private String path;
+}
+```
+
+---
+
+### 6. Module Auth POM
+**Chemin:** `./nexus-auth/pom.xml`
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>com.nexusai</groupId>
+        <artifactId>nexus-ai-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+    
+    <artifactId>nexus-auth</artifactId>
+    <name>NexusAI Authentication Service</name>
+    
+    <dependencies>
+        <!-- Core Module -->
+        <dependency>
+            <groupId>com.nexusai</groupId>
+            <artifactId>nexus-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        
+        <!-- PostgreSQL -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- OpenAPI/Swagger -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+        
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        
+        <!-- MapStruct -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${mapstruct.version}</version>
+        </dependency>
+        
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+---
+
+### 7. Application Main
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/NexusAuthApplication.java`
+
+```java
+package com.nexusai.auth;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+
+/**
+ * Application Spring Boot pour le service d'authentification NexusAI.
+ * 
+ * @author NexusAI Team
+ * @version 1.0
+ */
+@SpringBootApplication
+@EnableJpaAuditing
+@EntityScan(basePackages = "com.nexusai.core.domain")
+public class NexusAuthApplication {
+    
+    public static void main(String[] args) {
+        SpringApplication.run(NexusAuthApplication.class, args);
+    }
+}
+```
+
+---
+
+### 8. Configuration Spring Security
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/config/SecurityConfig.java`
+
+```java
+package com.nexusai.auth.config;
+
+import com.nexusai.auth.security.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+/**
+ * Configuration de Spring Security avec JWT.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+    
+    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final UserDetailsService userDetailsService;
+    
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .cors(cors -> cors.configure(http))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/api/v1/auth/**",
+                    "/api/v1/health",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**"
+                ).permitAll()
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        
+        return http.build();
+    }
+    
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
+    
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+    
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+---
+
+### 9. JWT Configuration
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/config/JwtConfig.java`
+
+```java
+package com.nexusai.auth.config;
+
+import lombok.Getter;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Configuration JWT centralisée.
+ */
+@Configuration
+@Getter
+public class JwtConfig {
+    
+    @Value("${jwt.secret}")
+    private String secret;
+    
+    @Value("${jwt.expiration:86400000}") // 24h par défaut
+    private Long expiration;
+    
+    @Value("${jwt.refresh-expiration:604800000}") // 7 jours par défaut
+    private Long refreshExpiration;
+}
+```
+
+---
+
+### 10. CORS Configuration
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/config/CorsConfig.java`
+
+```java
+package com.nexusai.auth.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Configuration CORS pour autoriser les requêtes cross-origin.
+ */
+@Configuration
+public class CorsConfig {
+    
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://nexusai.com"
+        ));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+```
+
+---
+
+### 11. OpenAPI Configuration
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/config/OpenApiConfig.java`
+
+```java
+package com.nexusai.auth.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Configuration Swagger/OpenAPI.
+ */
+@Configuration
+public class OpenApiConfig {
+    
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+            .info(new Info()
+                .title("NexusAI Authentication API")
+                .version("1.0.0")
+                .description("API d'authentification et gestion utilisateurs pour NexusAI")
+                .contact(new Contact()
+                    .name("NexusAI Team")
+                    .email("support@nexusai.com")
+                    .url("https://nexusai.com"))
+                .license(new License()
+                    .name("Proprietary")
+                    .url("https://nexusai.com/license")))
+            .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
+            .components(new Components()
+                .addSecuritySchemes("bearerAuth", new SecurityScheme()
+                    .type(SecurityScheme.Type.HTTP)
+                    .scheme("bearer")
+                    .bearerFormat("JWT")));
+    }
+}
+```
+
+---
+
+### 12. DTOs - Requests
+
+#### 12.1 RegistrationRequest
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/request/RegistrationRequest.java`
+
+```java
+package com.nexusai.auth.dto.request;
+
+import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+
+/**
+ * DTO pour l'inscription d'un nouvel utilisateur.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class RegistrationRequest {
+    
+    @NotBlank(message = "L'email est obligatoire")
+    @Email(message = "Format d'email invalide")
+    private String email;
+    
+    @NotBlank(message = "Le nom d'utilisateur est obligatoire")
+    @Size(min = 3, max = 30, message = "Le nom d'utilisateur doit contenir entre 3 et 30 caractères")
+    @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "Le nom d'utilisateur ne peut contenir que des lettres, chiffres, tirets et underscores")
+    private String username;
+    
+    @NotBlank(message = "Le mot de passe est obligatoire")
+    @Size(min = 8, message = "Le mot de passe doit contenir au moins 8 caractères")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+        message = "Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial"
+    )
+    private String password;
+    
+    @NotNull(message = "La date de naissance est obligatoire")
+    @Past(message = "La date de naissance doit être dans le passé")
+    private LocalDate birthDate;
+    
+    @AssertTrue(message = "Vous devez avoir au moins 18 ans pour vous inscrire")
+    public boolean isAgeValid() {
+        if (birthDate == null) return false;
+        return LocalDate.now().minusYears(18).isAfter(birthDate);
+    }
+}
+```
+
+#### 12.2 LoginRequest
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/request/LoginRequest.java`
+
+```java
+package com.nexusai.auth.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * DTO pour la connexion.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LoginRequest {
+    
+    @NotBlank(message = "L'identifiant est obligatoire")
+    private String emailOrUsername;
+    
+    @NotBlank(message = "Le mot de passe est obligatoire")
+    private String password;
+    
+    private Boolean rememberMe = false;
+}
+```
+
+#### 12.3 RefreshTokenRequest
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/request/RefreshTokenRequest.java`
+
+```java
+package com.nexusai.auth.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * DTO pour rafraîchir un token.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class RefreshTokenRequest {
+    
+    @NotBlank(message = "Le refresh token est obligatoire")
+    private String refreshToken;
+}
+```
+
+#### 12.4 UpdateUserRequest
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/request/UpdateUserRequest.java`
+
+```java
+package com.nexusai.auth.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * DTO pour la mise à jour du profil utilisateur.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateUserRequest {
+    
+    @Email(message = "Format d'email invalide")
+    private String email;
+    
+    @Size(min = 3, max = 30, message = "Le nom d'utilisateur doit contenir entre 3 et 30 caractères")
+    @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "Format de nom d'utilisateur invalide")
+    private String username;
+    
+    @Size(min = 8, message = "Le mot de passe doit contenir au moins 8 caractères")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+        message = "Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial"
+    )
+    private String newPassword;
+    
+    private String currentPassword;
+}
+```
+
+---
+
+### 13. DTOs - Responses
+
+#### 13.1 AuthResponse
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/response/AuthResponse.java`
+
+```java
+package com.nexusai.auth.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * DTO de réponse d'authentification.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuthResponse {
+    
+    private String accessToken;
+    private String refreshToken;
+    private String tokenType = "Bearer";
+    private Long expiresIn;
+    private UserResponse user;
+}
+```
+
+#### 13.2 UserResponse
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/response/UserResponse.java`
+
+```java
+package com.nexusai.auth.dto.response;
+
+import com.nexusai.core.enums.SubscriptionPlan;
+import com.nexusai.core.enums.UserRole;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * DTO de réponse utilisateur.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserResponse {
+    
+    private UUID id;
+    private String email;
+    private String username;
+    private LocalDate birthDate;
+    private UserRole role;
+    private Boolean emailVerified;
+    private SubscriptionPlan subscriptionPlan;
+    private Integer tokenBalance;
+    private LocalDateTime createdAt;
+    private LocalDateTime lastLogin;
+}
+```
+
+#### 13.3 TokenResponse
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/dto/response/TokenResponse.java`
+
+```java
+package com.nexusai.auth.dto.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * DTO de réponse pour les tokens.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TokenResponse {
+    
+    private String accessToken;
+    private String tokenType = "Bearer";
+    private Long expiresIn;
+}
+```
+
+---
+
+### 14. Repositories
+
+#### 14.1 UserRepository
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/repository/UserRepository.java`
+
+```java
+package com.nexusai.auth.repository;
+
+import com.nexusai.core.domain.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Repository pour l'entité User.
+ */
+@Repository
+public interface UserRepository extends JpaRepository<User, UUID> {
+    
+    Optional<User> findByEmail(String email);
+    
+    Optional<User> findByUsername(String username);
+    
+    @Query("SELECT u FROM User u WHERE u.email = :identifier OR u.username = :identifier")
+    Optional<User> findByEmailOrUsername(String identifier);
+    
+    boolean existsByEmail(String email);
+    
+    boolean existsByUsername(String username);
+}
+```
+
+#### 14.2 SubscriptionRepository
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/repository/SubscriptionRepository.java`
+
+```java
+package com.nexusai.auth.repository;
+
+import com.nexusai.core.domain.Subscription;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.UUID;
+
+/**
+ * Repository pour l'entité Subscription.
+ */
+@Repository
+public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
+    
+    Optional<Subscription> findByUserId(UUID userId);
+}
+```
+
+#### 14.3 TokenWalletRepository
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/repository/TokenWalletRepository.java`
+
+```java
+package com.nexusai.auth.repository;
+
+import com.nexusai.core.domain.TokenWallet;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Repository pour l'entité TokenWallet.
+ */
+@Repository
+public interface TokenWalletRepository extends JpaRepository<TokenWallet, UUID> {
+    
+    Optional<TokenWallet> findByUserId(UUID userId);
+}
+```
+
+---
+
+### 15. Security - JWT
+
+#### 15.1 JwtTokenProvider
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/security/JwtTokenProvider.java`
+
+```java
+package com.nexusai.auth.security;
+
+import com.nexusai.auth.config.JwtConfig;
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+/**
+ * Fournisseur de tokens JWT.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class JwtTokenProvider {
+    
+    private final JwtConfig jwtConfig;
+    
+    /**
+     * Génère un access token.
+     */
+    public String generateAccessToken(UserDetails userDetails) {
+        return generateToken(new HashMap<>(), userDetails, jwtConfig.getExpiration());
+    }
+    
+    /**
+     * Génère un refresh token.
+     */
+    public String generateRefreshToken(UserDetails userDetails) {
+        return generateToken(new HashMap<>(), userDetails, jwtConfig.getRefreshExpiration());
+    }
+    
+    /**
+     * Génère un token avec claims personnalisés.
+     */
+    public String generateToken(
+            Map<String, Object> extraClaims,
+            UserDetails userDetails,
+            long expiration) {
+        
+        return Jwts.builder()
+                .claims(extraClaims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+    
+    /**
+     * Extrait le username du token.
+     */
+    public String extractUsername(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+    
+    /**
+     * Extrait une claim spécifique du token.
+     */
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+    
+    /**
+     * Valide un token.
+     */
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+    }
+    
+    /**
+     * Vérifie si le token est expiré.
+     */
+    private boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+    
+    /**
+     * Extrait la date d'expiration.
+     */
+    private Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+    
+    /**
+     * Extrait toutes les claims du token.
+     */
+    private Claims extractAllClaims(String token) {
+        try {
+            return Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+        } catch (JwtException e) {
+            log.error("Erreur lors de l'extraction des claims: {}", e.getMessage());
+            throw e;
+        }
+    }
+    
+    /**
+     * Récupère la clé de signature.
+     */
+    private SecretKey getSigningKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(jwtConfig.getSecret());
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+}
+```
+
+#### 15.2 JwtAuthenticationFilter
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/security/JwtAuthenticationFilter.java`
+
+```java
+package com.nexusai.auth.security;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+/**
+ * Filtre d'authentification JWT.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    
+    private final JwtTokenProvider jwtTokenProvider;
+    private final UserDetailsService userDetailsService;
+    
+    @Override
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain) throws ServletException, IOException {
+        
+        final String authHeader = request.getHeader("Authorization");
+        
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
+        try {
+            final String jwt = authHeader.substring(7);
+            final String username = jwtTokenProvider.extractUsername(jwt);
+            
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                
+                if (jwtTokenProvider.isTokenValid(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken = 
+                        new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                        );
+                    
+                    authToken.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request)
+                    );
+                    
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Erreur lors de l'authentification JWT: {}", e.getMessage());
+        }
+        
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+#### 15.3 CustomUserDetails
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/security/CustomUserDetails.java`
+
+```java
+package com.nexusai.auth.security;
+
+import com.nexusai.core.domain.User;
+import lombok.AllArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.List;
+
+/**
+ * Implémentation personnalisée de UserDetails.
+ */
+@AllArgsConstructor
+public class CustomUserDetails implements UserDetails {
+    
+    private final User user;
+    
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+    }
+    
+    @Override
+    public String getPassword() {
+        return user.getPasswordHash();
+    }
+    
+    @Override
+    public String getUsername() {
+        return user.getEmail();
+    }
+    
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+    
+    @Override
+    public boolean isAccountNonLocked() {
+        return !user.getAccountLocked();
+    }
+    
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+    
+    @Override
+    public boolean isEnabled() {
+        return user.getActive();
+    }
+    
+    public User getUser() {
+        return user;
+    }
+}
+```
+
+#### 15.4 CustomUserDetailsService
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/security/CustomUserDetailsService.java`
+
+```java
+package com.nexusai.auth.security;
+
+import com.nexusai.auth.repository.UserRepository;
+import com.nexusai.core.domain.User;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+/**
+ * Service de chargement des détails utilisateur.
+ */
+@Service
+@RequiredArgsConstructor
+public class CustomUserDetailsService implements UserDetailsService {
+    
+    private final UserRepository userRepository;
+    
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByEmailOrUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                    "Utilisateur non trouvé: " + username
+                ));
+        
+        return new CustomUserDetails(user);
+    }
+}
+```
+
+---
+
+### 16. Services
+
+#### 16.1 AuthService Interface
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/service/AuthService.java`
+
+```java
+package com.nexusai.auth.service;
+
+import com.nexusai.auth.dto.request.LoginRequest;
+import com.nexusai.auth.dto.request.RefreshTokenRequest;
+import com.nexusai.auth.dto.request.RegistrationRequest;
+import com.nexusai.auth.dto.response.AuthResponse;
+import com.nexusai.auth.dto.response.TokenResponse;
+
+/**
+ * Service d'authentification.
+ */
+public interface AuthService {
+    
+    /**
+     * Inscrit un nouvel utilisateur.
+     */
+    AuthResponse register(RegistrationRequest request);
+    
+    /**
+     * Authentifie un utilisateur.
+     */
+    AuthResponse login(LoginRequest request);
+    
+    /**
+     * Rafraîchit un access token.
+     */
+    TokenResponse refreshToken(RefreshTokenRequest request);
+    
+    /**
+     * Déconnecte un utilisateur.
+     */
+    void logout(String token);
+}
+```
+
+#### 16.2 AuthService Implementation
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/service/impl/AuthServiceImpl.java`
+
+```java
+package com.nexusai.auth.service.impl;
+
+import com.nexusai.auth.dto.request.LoginRequest;
+import com.nexusai.auth.dto.request.RefreshTokenRequest;
+import com.nexusai.auth.dto.request.RegistrationRequest;
+import com.nexusai.auth.dto.response.AuthResponse;
+import com.nexusai.auth.dto.response.TokenResponse;
+import com.nexusai.auth.dto.response.UserResponse;
+import com.nexusai.auth.mapper.UserMapper;
+import com.nexusai.auth.repository.UserRepository;
+import com.nexusai.auth.security.CustomUserDetails;
+import com.nexusai.auth.security.JwtTokenProvider;
+import com.nexusai.auth.service.AuthService;
+import com.nexusai.core.domain.User;
+import com.nexusai.core.exception.UnauthorizedException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+
+/**
+ * Implémentation du service d'authentification.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AuthServiceImpl implements AuthService {
+    
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticationManager authenticationManager;
+    private final UserDetailsService userDetailsService;
+    private final UserMapper userMapper;
+    
+    @Override
+    @Transactional
+    public AuthResponse register(RegistrationRequest request) {
+        log.info("Inscription d'un nouvel utilisateur: {}", request.getEmail());
+        
+        // Vérifications
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Email déjà utilisé");
+        }
+        
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new IllegalArgumentException("Nom d'utilisateur déjà utilisé");
+        }
+        
+        // Création utilisateur
+        User user = User.builder()
+                .email(request.getEmail())
+                .username(request.getUsername())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .birthDate(request.getBirthDate())
+                .emailVerified(false)
+                .active(true)
+                .build();
+        
+        User savedUser = userRepository.save(user);
+        log.info("Utilisateur créé avec succès: ID={}", savedUser.getId());
+        
+        // Génération tokens
+        CustomUserDetails userDetails = new CustomUserDetails(savedUser);
+        String accessToken = jwtTokenProvider.generateAccessToken(userDetails);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(userDetails);
+        
+        UserResponse userResponse = userMapper.toUserResponse(savedUser);
+        
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(86400L) // 24h en secondes
+                .user(userResponse)
+                .build();
+    }
+    
+    @Override
+    @Transactional
+    public AuthResponse login(LoginRequest request) {
+        log.info("Tentative de connexion: {}", request.getEmailOrUsername());
+        
+        User user = userRepository.findByEmailOrUsername(request.getEmailOrUsername())
+                .orElseThrow(() -> new UnauthorizedException("Identifiants invalides"));
+        
+        // Vérifier si le compte est verrouillé
+        if (user.getAccountLocked()) {
+            if (user.getLockTime() != null && 
+                LocalDateTime.now().isAfter(user.getLockTime().plusMinutes(30))) {
+                // Déverrouiller après 30 minutes
+                user.setAccountLocked(false);
+                user.setFailedLoginAttempts(0);
+                user.setLockTime(null);
+                userRepository.save(user);
+            } else {
+                throw new UnauthorizedException("Compte verrouillé. Réessayez plus tard.");
+            }
+        }
+        
+        try {
+            // Authentification
+            Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    request.getEmailOrUsername(),
+                    request.getPassword()
+                )
+            );
+            
+            // Réinitialiser les tentatives échouées
+            if (user.getFailedLoginAttempts() > 0) {
+                user.setFailedLoginAttempts(0);
+                userRepository.save(user);
+            }
+            
+            // Mettre à jour dernière connexion
+            user.setLastLogin(LocalDateTime.now());
+            userRepository.save(user);
+            
+            // Génération tokens
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            String accessToken = jwtTokenProvider.generateAccessToken(userDetails);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(userDetails);
+            
+            UserResponse userResponse = userMapper.toUserResponse(user);
+            
+            log.info("Connexion réussie pour: {}", request.getEmailOrUsername());
+            
+            return AuthResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .expiresIn(86400L)
+                    .user(userResponse)
+                    .build();
+                    
+        } catch (Exception e) {
+            // Incrémenter tentatives échouées
+            user.setFailedLoginAttempts(user.getFailedLoginAttempts() + 1);
+            
+            if (user.getFailedLoginAttempts() >= 5) {
+                user.setAccountLocked(true);
+                user.setLockTime(LocalDateTime.now());
+                log.warn("Compte verrouillé après 5 tentatives: {}", user.getEmail());
+            }
+            
+            userRepository.save(user);
+            throw new UnauthorizedException("Identifiants invalides");
+        }
+    }
+    
+    @Override
+    public TokenResponse refreshToken(RefreshTokenRequest request) {
+        String refreshToken = request.getRefreshToken();
+        String username = jwtTokenProvider.extractUsername(refreshToken);
+        
+        var userDetails = userDetailsService.loadUserByUsername(username);
+        
+        if (!jwtTokenProvider.isTokenValid(refreshToken, userDetails)) {
+            throw new UnauthorizedException("Token invalide ou expiré");
+        }
+        
+        String newAccessToken = jwtTokenProvider.generateAccessToken(userDetails);
+        
+        return TokenResponse.builder()
+                .accessToken(newAccessToken)
+                .expiresIn(86400L)
+                .build();
+    }
+    
+    @Override
+    public void logout(String token) {
+        // TODO: Implémenter blacklist des tokens dans Redis
+        log.info("Déconnexion utilisateur");
+    }
+}
+```
+
+---
+
+### 17. UserMapper
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/mapper/UserMapper.java`
+
+```java
+package com.nexusai.auth.mapper;
+
+import com.nexusai.auth.dto.response.UserResponse;
+import com.nexusai.core.domain.User;
+import org.springframework.stereotype.Component;
+
+/**
+ * Mapper pour convertir User en UserResponse.
+ */
+@Component
+public class UserMapper {
+    
+    public UserResponse toUserResponse(User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .username(user.getUsername())
+                .birthDate(user.getBirthDate())
+                .role(user.getRole())
+                .emailVerified(user.getEmailVerified())
+                .subscriptionPlan(user.getSubscription() != null ? 
+                    user.getSubscription().getPlan() : null)
+                .tokenBalance(user.getTokenWallet() != null ? 
+                    user.getTokenWallet().getBalance() : 0)
+                .createdAt(user.getCreatedAt())
+                .lastLogin(user.getLastLogin())
+                .build();
+    }
+}
+```
+
+---
+
+### 18. Contrôleurs
+
+#### 18.1 AuthController
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/controller/AuthController.java`
+
+```java
+package com.nexusai.auth.controller;
+
+import com.nexusai.auth.dto.request.LoginRequest;
+import com.nexusai.auth.dto.request.RefreshTokenRequest;
+import com.nexusai.auth.dto.request.RegistrationRequest;
+import com.nexusai.auth.dto.response.AuthResponse;
+import com.nexusai.auth.dto.response.TokenResponse;
+import com.nexusai.auth.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Contrôleur pour l'authentification.
+ */
+@RestController
+@RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
+@Tag(name = "Authentication", description = "Endpoints d'authentification")
+public class AuthController {
+    
+    private final AuthService authService;
+    
+    /**
+     * Inscription d'un nouvel utilisateur.
+     */
+    @PostMapping("/register")
+    @Operation(summary = "Inscription", description = "Crée un nouveau compte utilisateur")
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegistrationRequest request) {
+        AuthResponse response = authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+    
+    /**
+     * Connexion utilisateur.
+     */
+    @PostMapping("/login")
+    @Operation(summary = "Connexion", description = "Authentifie un utilisateur et retourne les tokens")
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Rafraîchir le token d'accès.
+     */
+    @PostMapping("/refresh")
+    @Operation(summary = "Rafraîchir token", description = "Génère un nouveau token d'accès")
+    public ResponseEntity<TokenResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        TokenResponse response = authService.refreshToken(request);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Déconnexion utilisateur.
+     */
+    @PostMapping("/logout")
+    @Operation(summary = "Déconnexion", description = "Déconnecte l'utilisateur")
+    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String token) {
+        String jwt = token.substring(7);
+        authService.logout(jwt);
+        return ResponseEntity.ok().build();
+    }
+}
+```
+
+#### 18.2 UserController
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/controller/UserController.java`
+
+```java
+package com.nexusai.auth.controller;
+
+import com.nexusai.auth.dto.response.UserResponse;
+import com.nexusai.auth.mapper.UserMapper;
+import com.nexusai.auth.security.CustomUserDetails;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Contrôleur pour la gestion des utilisateurs.
+ */
+@RestController
+@RequestMapping("/api/v1/users")
+@RequiredArgsConstructor
+@Tag(name = "Users", description = "Gestion des utilisateurs")
+public class UserController {
+    
+    private final UserMapper userMapper;
+    
+    /**
+     * Récupère le profil de l'utilisateur connecté.
+     */
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Mon profil", description = "Récupère les informations de l'utilisateur connecté")
+    public ResponseEntity<UserResponse> getMyProfile(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        
+        UserResponse response = userMapper.toUserResponse(userDetails.getUser());
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Endpoint de santé du service.
+     */
+    @GetMapping("/health")
+    @Operation(summary = "Health check", description = "Vérifie que le service est actif")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Service actif");
+    }
+}
+```
+
+---
+
+### 19. Exception Handler
+**Chemin:** `./nexus-auth/src/main/java/com/nexusai/auth/exception/GlobalExceptionHandler.java`
+
+```java
+package com.nexusai.auth.exception;
+
+import com.nexusai.core.exception.ErrorResponse;
+import com.nexusai.core.exception.ResourceNotFoundException;
+import com.nexusai.core.exception.UnauthorizedException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Gestionnaire global des exceptions.
+ */
+@Slf4j
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+    
+    /**
+     * Gère les erreurs de validation.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(
+            MethodArgumentNotValidException ex) {
+        
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+    }
+    
+    /**
+     * Gère les ressources non trouvées.
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(
+            ResourceNotFoundException ex,
+            WebRequest request) {
+        
+        log.warn("Ressource non trouvée: {}", ex.getMessage());
+        
+        ErrorResponse error = ErrorResponse.builder()
+                .code("RESOURCE_NOT_FOUND")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getDescription(false))
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+    
+    /**
+     * Gère les erreurs d'authentification.
+     */
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorized(
+            UnauthorizedException ex,
+            WebRequest request) {
+        
+        log.warn("Erreur d'authentification: {}", ex.getMessage());
+        
+        ErrorResponse error = ErrorResponse.builder()
+                .code("UNAUTHORIZED")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getDescription(false))
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+    }
+    
+    /**
+     * Gère les arguments illégaux.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex,
+            WebRequest request) {
+        
+        log.warn("Argument invalide: {}", ex.getMessage());
+        
+        ErrorResponse error = ErrorResponse.builder()
+                .code("INVALID_ARGUMENT")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getDescription(false))
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+    
+    /**
+     * Gère toutes les autres exceptions.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGlobalException(
+            Exception ex,
+            WebRequest request) {
+        
+        log.error("Erreur interne: ", ex);
+        
+        ErrorResponse error = ErrorResponse.builder()
+                .code("INTERNAL_ERROR")
+                .message("Une erreur interne s'est produite")
+                .timestamp(LocalDateTime.now())
+                .path(request.getDescription(false))
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+}
+```
+
+---
+
+### 20. Fichiers de Configuration
+
+#### 20.1 application.yml
+**Chemin:** `./nexus-auth/src/main/resources/application.yml`
+
+```yaml
+spring:
+  application:
+    name: nexus-auth-service
+  profiles:
+    active: ${SPRING_PROFILE:dev}
+  
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nexusai_auth}
+    username: ${DATABASE_USERNAME:nexusai}
+    password: ${DATABASE_PASSWORD:nexusai_password}
+    driver-class-name: org.postgresql.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      
+server:
+  port: ${PORT:8081}
+  servlet:
+    context-path: /
+    
+jwt:
+  secret: ${JWT_SECRET:Y2xhdWRlX3NvbmV0XzQ1X25leHVzYWlfand0X3NlY3JldF9rZXlfbXVzdF9iZV9hdF9sZWFzdF8yNTZfYml0c19sb25n}
+  expiration: 86400000 # 24h en millisecondes
+  refresh-expiration: 604800000 # 7 jours en millisecondes
+  
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    
+logging:
+  level:
+    com.nexusai: INFO
+    org.springframework.security: DEBUG
+```
+
+#### 20.2 application-dev.yml
+**Chemin:** `./nexus-auth/src/main/resources/application-dev.yml`
+
+```yaml
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: create-drop
+      
+logging:
+  level:
+    com.nexusai: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+```
+
+#### 20.3 application-prod.yml
+**Chemin:** `./nexus-auth/src/main/resources/application-prod.yml`
+
+```yaml
+spring:
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+      
+logging:
+  level:
+    com.nexusai: WARN
+    org.springframework: WARN
+```
+
+---
+
+### 21. Tests
+
+#### 21.1 AuthControllerTest
+**Chemin:** `./nexus-auth/src/test/java/com/nexusai/auth/controller/AuthControllerTest.java`
+
+```java
+package com.nexusai.auth.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexusai.auth.dto.request.LoginRequest;
+import com.nexusai.auth.dto.request.RegistrationRequest;
+import com.nexusai.auth.dto.response.AuthResponse;
+import com.nexusai.auth.service.AuthService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDate;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * Tests du contrôleur d'authentification.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+class AuthControllerTest {
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @Autowired
+    private ObjectMapper objectMapper;
+    
+    @MockBean
+    private AuthService authService;
+    
+    @Test
+    void register_ValidRequest_ReturnsCreated() throws Exception {
+        // Arrange
+        RegistrationRequest request = RegistrationRequest.builder()
+                .email("test@example.com")
+                .username("testuser")
+                .password("Test@1234")
+                .birthDate(LocalDate.of(2000, 1, 1))
+                .build();
+        
+        AuthResponse response = AuthResponse.builder()
+                .accessToken("token")
+                .refreshToken("refresh")
+                .expiresIn(86400L)
+                .build();
+        
+        when(authService.register(any(RegistrationRequest.class))).thenReturn(response);
+        
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accessToken").exists())
+                .andExpect(jsonPath("$.refreshToken").exists());
+    }
+    
+    @Test
+    void register_InvalidEmail_ReturnsBadRequest() throws Exception {
+        // Arrange
+        RegistrationRequest request = RegistrationRequest.builder()
+                .email("invalid-email")
+                .username("testuser")
+                .password("Test@1234")
+                .birthDate(LocalDate.of(2000, 1, 1))
+                .build();
+        
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+    
+    @Test
+    void login_ValidCredentials_ReturnsOk() throws Exception {
+        // Arrange
+        LoginRequest request = LoginRequest.builder()
+                .emailOrUsername("test@example.com")
+                .password("Test@1234")
+                .build();
+        
+        AuthResponse response = AuthResponse.builder()
+                .accessToken("token")
+                .refreshToken("refresh")
+                .expiresIn(86400L)
+                .build();
+        
+        when(authService.login(any(LoginRequest.class))).thenReturn(response);
+        
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists());
+    }
+}
+```
+
+---
+
+### 22. Script de Démarrage PostgreSQL
+**Chemin:** `./docker-compose.yml` (racine du projet)
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexusai-postgres
+    environment:
+      POSTGRES_DB: nexusai_auth
+      POSTGRES_USER: nexusai
+      POSTGRES_PASSWORD: nexusai_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nexusai-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexusai-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - nexusai-network
+
+volumes:
+  postgres_data:
+
+networks:
+  nexusai-network:
+    driver: bridge
+```
+
+---
+
+### 23. README
+**Chemin:** `./README.md`
+
+```markdown
+# NexusAI - Module User & Authentication
+
+Module d'authentification et de gestion des utilisateurs pour la plateforme NexusAI.
+
+## 🚀 Technologies
+
+- Java 21
+- Spring Boot 3.2
+- Spring Security 6.x
+- JWT (JSON Web Tokens)
+- PostgreSQL 16
+- Redis 7
+- Maven 3.9+
+
+## 📋 Prérequis
+
+- JDK 21
+- Maven 3.9+
+- PostgreSQL 16
+- Redis 7
+- Docker (optionnel)
+
+## ⚙️ Installation
+
+### Avec Docker
+
+```bash
+# Démarrer PostgreSQL et Redis
+docker-compose up -d
+
+# Compiler le projet
+mvn clean install
+
+# Démarrer l'application
+cd nexus-auth
+mvn spring-boot:run
+```
+
+### Sans Docker
+
+1. Installer PostgreSQL et créer la base de données:
+```sql
+CREATE DATABASE nexusai_auth;
+CREATE USER nexusai WITH PASSWORD 'nexusai_password';
+GRANT ALL PRIVILEGES ON DATABASE nexusai_auth TO nexusai;
+```
+
+2. Installer Redis
+
+3. Configurer les variables d'environnement dans `application.yml`
+
+4. Démarrer l'application:
+```bash
+mvn spring-boot:run
+```
+
+## 📚 Documentation API
+
+Une fois l'application démarrée, accéder à :
+- Swagger UI: http://localhost:8081/swagger-ui.html
+- OpenAPI JSON: http://localhost:8081/v3/api-docs
+
+## 🔐 Endpoints Principaux
+
+### Authentification
+- `POST /api/v1/auth/register` - Inscription
+- `POST /api/v1/auth/login` - Connexion
+- `POST /api/v1/auth/refresh` - Rafraîchir le token
+- `POST /api/v1/auth/logout` - Déconnexion
+
+### Utilisateurs
+- `GET /api/v1/users/me` - Profil utilisateur (authentifié)
+
+## 🧪 Tests
+
+```bash
+mvn test
+```
+
+## 📦 Structure du Projet
+
+```
+nexus-ai-parent/
+├── nexus-core/          # Entités et exceptions partagées
+└── nexus-auth/          # Service d'authentification
+    ├── config/          # Configurations Spring
+    ├── controller/      # Contrôleurs REST
+    ├── dto/             # Data Transfer Objects
+    ├── repository/      # Repositories JPA
+    ├── service/         # Services métier
+    └── security/        # Configuration sécurité et JWT
+```
+
+## 🔑 Variables d'Environnement
+
+```env
+DATABASE_URL=jdbc:postgresql://localhost:5432/nexusai_auth
+DATABASE_USERNAME=nexusai
+DATABASE_PASSWORD=nexusai_password
+JWT_SECRET=votre_secret_jwt_ici
+REDIS_HOST=localhost
+REDIS_PORT=6379
+```
+
+## 👥 Équipe
+
+NexusAI Team - support@nexusai.com
+
+## 📄 Licence
+
+Proprietary - © 2025 NexusAI
+```
+
+---
+
+## ✅ RÉCAPITULATIF COMPLET
+
+### Fichiers Créés (avec chemins relatifs)
+
+**Module Core (6 fichiers):**
+1. `./nexus-core/pom.xml`
+2. `./nexus-core/src/main/java/com/nexusai/core/domain/User.java`
+3. `./nexus-core/src/main/java/com/nexusai/core/domain/Subscription.java`
+4. `./nexus-core/src/main/java/com/nexusai/core/domain/TokenWallet.java`
+5. `./nexus-core/src/main/java/com/nexusai/core/enums/UserRole.java`
+6. `./nexus-core/src/main/java/com/nexusai/core/enums/SubscriptionPlan.java`
+
+**Exceptions (3 fichiers):**
+7. `./nexus-core/src/main/java/com/nexusai/core/exception/ResourceNotFoundException.java`
+8. `./nexus-core/src/main/java/com/nexusai/core/exception/UnauthorizedException.java`
+9. `./nexus-core/src/main/java/com/nexusai/core/exception/ErrorResponse.java`
+
+**Module Auth - Configuration (5 fichiers):**
+10. `./nexus-auth/pom.xml`
+11. `./nexus-auth/src/main/java/com/nexusai/auth/NexusAuthApplication.java`
+12. `./nexus-auth/src/main/java/com/nexusai/auth/config/SecurityConfig.java`
+13. `./nexus-auth/src/main/java/com/nexusai/auth/config/JwtConfig.java`
+14. `./nexus-auth/src/main/java/com/nexusai/auth/config/CorsConfig.java`
+15. `./nexus-auth/src/main/java/com/nexusai/auth/config/OpenApiConfig.java`
+
+**DTOs (7 fichiers):**
+16-19. Requests dans `./nexus-auth/src/main/java/com/nexusai/auth/dto/request/`
+20-22. Responses dans `./nexus-auth/src/main/java/com/nexusai/auth/dto/response/`
+
+**Repositories (3 fichiers):**
+23-25. Dans `./nexus-auth/src/main/java/com/nexusai/auth/repository/`
+
+**Security (4 fichiers):**
+26-29. Dans `./nexus-auth/src/main/java/com/nexusai/auth/security/`
+
+**Services (2 fichiers):**
+30-31. Dans `./nexus-auth/src/main/java/com/nexusai/auth/service/`
+
+**Contrôleurs (2 fichiers):**
+32-33. Dans `./nexus-auth/src/main/java/com/nexusai/auth/controller/`
+
+**Autres (6 fichiers):**
+34. `./nexus-auth/src/main/java/com/nexusai/auth/mapper/UserMapper.java`
+35. `./nexus-auth/src/main/java/com/nexusai/auth/exception/GlobalExceptionHandler.java`
+36. `./nexus-auth/src/main/resources/application.yml`
+37. `./nexus-auth/src/main/resources/application-dev.yml`
+38. `./nexus-auth/src/main/resources/application-prod.yml`
+39. `./nexus-auth/src/test/java/com/nexusai/auth/controller/AuthControllerTest.java`
+
+**Configuration projet (3 fichiers):**
+40. `./pom.xml` (parent)
+41. `./docker-compose.yml`
+42. `./README.md`
+
+### Fonctionnalités Implémentées
+
+✅ Inscription avec validation complète
+✅ Connexion avec gestion des tentatives échouées
+✅ Génération et validation JWT
+✅ Refresh tokens
+✅ Sécurité Spring Security
+✅ Documentation Swagger/OpenAPI
+✅ Gestion des erreurs globale
+✅ Tests unitaires
+✅ Configuration multi-environnement
+✅ Docker Compose pour PostgreSQL et Redis
+
+### Prochaines Étapes
+
+1. Lancer `docker-compose up -d`
+2. Compiler avec `mvn clean install`
+3. Démarrer avec `mvn spring-boot:run`
+4. Tester via Swagger: http://localhost:8081/swagger-ui.html

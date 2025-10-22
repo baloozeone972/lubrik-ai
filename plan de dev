@@ -1,0 +1,3411 @@
+
+
+nexusai-advanced-user-stories.md
+1 196 lignes
+
+md
+
+
+nexusai-complete-docs.md
+2 923 lignes
+
+md
+
+
+nexusai-technical-diagrams.md
+1 381 lignes
+
+md
+
+a aprtrir des document joint realiser un plan de développement par module afin de pouvoir ertre realise independamment
+
+PLAN DE DÉVELOPPEMENT MODULAIRE NEXUSAI
+Version 1.0 | Date : 17 Octobre 2025
+
+TABLE DES MATIÈRES
+Vue d'Ensemble de l'Architecture Modulaire
+Module 1 : User Management & Authentication
+Module 2 : Payment & Subscription System
+Module 3 : Companion Management
+Module 4 : Conversation Engine
+Module 5 : Media Generation (Images)
+Module 6 : Audio Processing
+Module 7 : Video Generation Pipeline
+Module 8 : VR System
+Module 9 : Moderation System
+Module 10 : Analytics & Monitoring
+Ordre de Développement Recommandé
+Stratégie d'Intégration
+1. VUE D'ENSEMBLE DE L'ARCHITECTURE MODULAIRE
+1.1 Principes de Modularité
+┌─────────────────────────────────────────────────────────────────┐
+│                   ARCHITECTURE MODULAIRE                        │
+│                                                                 │
+│  Chaque module est :                                            │
+│  ✓ Indépendant (propre base de code)                           │
+│  ✓ Déployable séparément                                       │
+│  ✓ Testable isolément                                          │
+│  ✓ Communicant via APIs REST + Events                          │
+│  ✓ Doté de sa propre base de données                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 1.2 Carte des Dépendances
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    DÉPENDANCES INTER-MODULES                   │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  [1. User Management] ←── Base pour tous les modules           │
+│           │                                                    │
+│           ├──→ [2. Payment & Subscription]                     │
+│           │         │                                          │
+│           │         └──→ [3. Companion Management]             │
+│           │                     │                              │
+│           │                     ├──→ [4. Conversation]         │
+│           │                     │         │                    │
+│           │                     │         ├──→ [5. Images]     │
+│           │                     │         │                    │
+│           │                     │         ├──→ [6. Audio]      │
+│           │                     │         │                    │
+│           │                     │         └──→ [7. Video]      │
+│           │                     │                              │
+│           │                     └──→ [8. VR System]            │
+│           │                                                    │
+│           ├──→ [9. Moderation] ←─── Transversal               │
+│           │                                                    │
+│           └──→ [10. Analytics] ←─── Transversal               │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+
+LÉGENDE:
+──→ : Dépendance directe (appels API synchrones)
+←── : Dépendance événementielle (messages asynchrones)
+```
+
+## 1.3 Communication Inter-Modules
+
+### 1.3.1 APIs REST (Synchrone)
+```
+Module A ──[HTTP/REST]──> Module B
+         <──[Response]───
+
+Utilisé pour :
+- Récupération de données
+- Opérations CRUD
+- Validations
+```
+
+### 1.3.2 Event Bus (Asynchrone)
+```
+Module A ──[Event: UserCreated]──> Kafka/RabbitMQ
+                                        │
+                    ┌───────────────────┼───────────────────┐
+                    ↓                   ↓                   ↓
+              Module B            Module C            Module D
+            (Listener)          (Listener)          (Listener)
+
+Utilisé pour :
+- Notifications
+- Synchronisation de données
+- Déclenchement d'actions asynchrones
+```
+
+---
+
+# MODULE 1 : USER MANAGEMENT & AUTHENTICATION
+
+## 1.1 Description
+Module fondamental gérant les utilisateurs, l'authentification, les sessions et les profils.
+
+## 1.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  USER MANAGEMENT MODULE                                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Inscription & vérification email                        │
+│  ✓ Authentification (JWT + OAuth2)                         │
+│  ✓ Gestion sessions & refresh tokens                       │
+│  ✓ Gestion profils utilisateurs                            │
+│  ✓ Vérification d'âge (KYC)                                │
+│  ✓ Gestion des préférences                                 │
+│  ✓ Système de rôles (USER, MODERATOR, ADMIN)               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+1.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Security: Spring Security 6.x
+  - Database: PostgreSQL 16
+  - Cache: Redis 7+
+  - Token: JWT (jjwt 0.12.3)
+
+Frontend:
+  - Framework: React 18 + TypeScript
+  - State: Redux Toolkit
+  - UI: Material-UI / Tailwind CSS
+1.4 Schéma de Base de Données
+sql
+-- Tables principales
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    birth_date DATE NOT NULL,
+    role VARCHAR(20) DEFAULT 'USER',
+    email_verified BOOLEAN DEFAULT FALSE,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE refresh_tokens (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    token VARCHAR(512) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE kyc_verifications (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    level INTEGER CHECK (level BETWEEN 0 AND 3),
+    status VARCHAR(20),
+    verified_at TIMESTAMP
+);
+```
+
+## 1.5 APIs Exposées
+```
+┌──────────────────────────────────────────────────────────┐
+│  REST ENDPOINTS                                          │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  POST   /api/v1/auth/register                            │
+│  POST   /api/v1/auth/login                               │
+│  POST   /api/v1/auth/logout                              │
+│  POST   /api/v1/auth/refresh                             │
+│  POST   /api/v1/auth/verify-email                        │
+│                                                          │
+│  GET    /api/v1/users/me                                 │
+│  PUT    /api/v1/users/me                                 │
+│  PATCH  /api/v1/users/me/password                        │
+│  DELETE /api/v1/users/me                                 │
+│                                                          │
+│  POST   /api/v1/users/me/kyc                             │
+│  GET    /api/v1/users/me/kyc/status                      │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+## 1.6 Événements Émis
+```
+┌──────────────────────────────────────────────────────────┐
+│  KAFKA EVENTS                                            │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  user.registered                                         │
+│    ├─ userId                                             │
+│    ├─ email                                              │
+│    └─ timestamp                                          │
+│                                                          │
+│  user.email.verified                                     │
+│    ├─ userId                                             │
+│    └─ timestamp                                          │
+│                                                          │
+│  user.kyc.updated                                        │
+│    ├─ userId                                             │
+│    ├─ level (0-3)                                        │
+│    └─ status                                             │
+│                                                          │
+│  user.deleted                                            │
+│    ├─ userId                                             │
+│    └─ timestamp                                          │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+## 1.7 Plan de Développement
+
+### Phase 1.1 : Setup & Infrastructure (Semaine 1)
+```
+□ Configuration projet Maven multi-module
+□ Setup PostgreSQL + Redis
+□ Configuration Spring Security
+□ Configuration Kafka producer
+□ Setup CI/CD pipeline
+```
+
+### Phase 1.2 : Authentification de Base (Semaine 2)
+```
+□ Implémentation inscription
+□ Implémentation login/logout
+□ Génération & validation JWT
+□ Gestion refresh tokens
+□ Tests unitaires auth
+```
+
+### Phase 1.3 : Gestion Profils (Semaine 3)
+```
+□ CRUD profils utilisateurs
+□ Upload avatar (S3/MinIO)
+□ Gestion préférences
+□ Tests unitaires profils
+```
+
+### Phase 1.4 : KYC & Vérifications (Semaine 4)
+```
+□ Intégration fournisseur KYC (Onfido/Jumio)
+□ Système de niveaux (0-3)
+□ Vérification d'âge
+□ Tests intégration KYC
+```
+
+### Phase 1.5 : Frontend (Semaine 5)
+```
+□ Pages inscription/login
+□ Dashboard utilisateur
+□ Gestion profil
+□ Tests E2E
+1.8 Dépendances Maven
+xml
+<dependencies>
+    <!-- Spring Boot -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    
+    <!-- JWT -->
+    <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>0.12.3</version>
+    </dependency>
+    
+    <!-- Redis -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+    
+    <!-- Kafka -->
+    <dependency>
+        <groupId>org.springframework.kafka</groupId>
+        <artifactId>spring-kafka</artifactId>
+    </dependency>
+    
+    <!-- PostgreSQL -->
+    <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+    </dependency>
+</dependencies>
+```
+
+## 1.9 Critères de Succès
+```
+✓ 100% des tests unitaires passent
+✓ Temps de réponse API < 100ms (P95)
+✓ Support 10,000 utilisateurs simultanés
+✓ Taux de réussite inscription > 95%
+✓ Sécurité : Pas de failles critiques (OWASP Top 10)
+✓ Documentation API complète (Swagger)
+```
+
+---
+
+# MODULE 2 : PAYMENT & SUBSCRIPTION SYSTEM
+
+## 2.1 Description
+Gestion des paiements, abonnements, jetons et facturation via Stripe.
+
+## 2.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PAYMENT MODULE                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Intégration Stripe (cartes, PayPal, Apple Pay)          │
+│  ✓ Gestion abonnements (FREE → VIP+)                       │
+│  ✓ Facturation automatique mensuelle                       │
+│  ✓ Gestion des jetons (achat, consommation)                │
+│  ✓ Webhooks Stripe                                         │
+│  ✓ Génération factures & reçus                             │
+│  ✓ Remboursements                                           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+2.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Database: PostgreSQL 16
+  - Payment: Stripe SDK 24.x
+  - Queue: Kafka (événements)
+  
+External Services:
+  - Stripe API
+  - Email Service (SendGrid/AWS SES)
+2.4 Schéma de Base de Données
+sql
+CREATE TABLE subscriptions (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    plan VARCHAR(20) NOT NULL,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP,
+    auto_renewal BOOLEAN DEFAULT TRUE,
+    stripe_subscription_id VARCHAR(255),
+    monthly_price DECIMAL(10,2)
+);
+
+CREATE TABLE token_wallets (
+    id UUID PRIMARY KEY,
+    user_id UUID UNIQUE NOT NULL,
+    balance INTEGER DEFAULT 0 CHECK (balance >= 0),
+    total_earned INTEGER DEFAULT 0,
+    total_spent INTEGER DEFAULT 0
+);
+
+CREATE TABLE token_transactions (
+    id UUID PRIMARY KEY,
+    wallet_id UUID REFERENCES token_wallets(id),
+    type VARCHAR(20) NOT NULL,
+    amount INTEGER NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE payment_transactions (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'EUR',
+    status VARCHAR(20) DEFAULT 'PENDING',
+    stripe_payment_intent_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## 2.5 APIs Exposées
+```
+POST   /api/v1/subscriptions/subscribe
+POST   /api/v1/subscriptions/cancel
+GET    /api/v1/subscriptions/current
+PUT    /api/v1/subscriptions/update
+
+POST   /api/v1/tokens/purchase
+GET    /api/v1/tokens/balance
+GET    /api/v1/tokens/history
+
+POST   /api/v1/webhooks/stripe
+GET    /api/v1/payments/invoices
+GET    /api/v1/payments/history
+```
+
+## 2.6 Dépendances avec Autres Modules
+```
+┌────────────────────────────────────────┐
+│  DÉPENDANCES                           │
+├────────────────────────────────────────┤
+│                                        │
+│  ENTRANTES (APIs appelées par):        │
+│  ← Module 1 (User Management)          │
+│  ← Module 3 (Companion)                │
+│  ← Module 5 (Images)                   │
+│  ← Module 7 (Video)                    │
+│                                        │
+│  SORTANTES (APIs appelées):            │
+│  → Module 1 (vérif user, quotas)       │
+│                                        │
+│  ÉVÉNEMENTS ÉCOUTÉS:                   │
+│  ← user.registered                     │
+│  ← user.deleted                        │
+│                                        │
+│  ÉVÉNEMENTS ÉMIS:                      │
+│  → subscription.created                │
+│  → subscription.upgraded               │
+│  → subscription.canceled               │
+│  → tokens.purchased                    │
+│  → tokens.consumed                     │
+│                                        │
+└────────────────────────────────────────┘
+```
+
+## 2.7 Plan de Développement
+
+### Phase 2.1 : Infrastructure (Semaine 1)
+```
+□ Configuration Stripe SDK
+□ Setup webhook endpoint
+□ Configuration base de données
+□ Tests sandbox Stripe
+```
+
+### Phase 2.2 : Abonnements (Semaine 2)
+```
+□ Création abonnement
+□ Upgrade/downgrade
+□ Annulation
+□ Facturation automatique
+□ Tests Stripe Test Mode
+```
+
+### Phase 2.3 : Jetons (Semaine 3)
+```
+□ Système de wallet
+□ Achat de jetons
+□ Consommation de jetons
+□ Historique transactions
+□ Tests unitaires
+```
+
+### Phase 2.4 : Webhooks & Facturation (Semaine 4)
+```
+□ Handlers webhooks Stripe
+□ Génération factures PDF
+□ Emails automatiques
+□ Tests webhooks
+```
+
+### Phase 2.5 : Frontend (Semaine 5)
+```
+□ Pages pricing
+□ Checkout Stripe
+□ Gestion abonnement
+□ Historique paiements
+```
+
+---
+
+# MODULE 3 : COMPANION MANAGEMENT
+
+## 3.1 Description
+Gestion de la création, personnalisation et évolution des compagnons IA.
+
+## 3.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  COMPANION MODULE                                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Création de compagnons (modèles prédéfinis)             │
+│  ✓ Personnalisation apparence & personnalité               │
+│  ✓ Système de traits génétiques (20+ traits)               │
+│  ✓ Évolution progressive                                    │
+│  ✓ Fusion de traits entre compagnons                       │
+│  ✓ Galerie publique de compagnons                          │
+│  ✓ Import/Export configurations                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+3.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Database: MongoDB 7+ (documents JSON)
+  - Cache: Redis
+  - Storage: S3/MinIO (avatars)
+  
+Frontend:
+  - React 18 + TypeScript
+  - 3D Viewer: Three.js (prévisualisation avatars)
+3.4 Schéma MongoDB
+javascript
+// Collection: companions
+{
+  _id: ObjectId,
+  userId: String,
+  name: String,
+  
+  appearance: {
+    gender: String,
+    hairColor: String,
+    eyeColor: String,
+    skinTone: String,
+    bodyType: String,
+    age: Number,
+    avatarImageUrl: String,
+    customFeatures: Object
+  },
+  
+  personality: {
+    traits: {
+      openness: 50,          // 0-100
+      conscientiousness: 70,
+      extraversion: 60,
+      agreeableness: 80,
+      neuroticism: 30,
+      humor: 65,
+      empathy: 75,
+      jealousy: 20,
+      // ... 20 traits total
+    },
+    interests: [String],
+    dislikes: [String],
+    humorStyle: String,
+    communicationStyle: String
+  },
+  
+  voice: {
+    voiceId: String,
+    pitch: Number,
+    speed: Number,
+    style: String
+  },
+  
+  backstory: String,
+  
+  geneticProfile: {
+    genes: Object,
+    dominantTraits: [String],
+    recessiveTraits: [String],
+    frozen: Boolean,
+    frozenTraits: [String]
+  },
+  
+  emotionalState: {
+    current: String,
+    intensity: Number,
+    duration: Number
+  },
+  
+  isPublic: Boolean,
+  likeCount: Number,
+  
+  createdAt: ISODate,
+  lastEvolutionDate: ISODate,
+  updatedAt: ISODate
+}
+
+// Indexes
+db.companions.createIndex({ userId: 1 });
+db.companions.createIndex({ name: 1 });
+db.companions.createIndex({ isPublic: 1, likeCount: -1 });
+```
+
+## 3.5 APIs Exposées
+```
+POST   /api/v1/companions
+GET    /api/v1/companions/{id}
+PUT    /api/v1/companions/{id}
+DELETE /api/v1/companions/{id}
+GET    /api/v1/companions/user/{userId}
+
+GET    /api/v1/companions/templates
+POST   /api/v1/companions/from-template/{templateId}
+
+PUT    /api/v1/companions/{id}/appearance
+PUT    /api/v1/companions/{id}/personality
+PUT    /api/v1/companions/{id}/voice
+
+POST   /api/v1/companions/{id}/evolve
+POST   /api/v1/companions/{id}/freeze-traits
+POST   /api/v1/companions/merge
+
+GET    /api/v1/companions/public
+POST   /api/v1/companions/{id}/like
+```
+
+## 3.6 Dépendances
+```
+DÉPENDANCES:
+  → Module 1 (User) : Vérification userId, quotas selon plan
+  → Module 2 (Payment) : Vérification limites compagnons
+  
+ÉVÉNEMENTS ÉCOUTÉS:
+  ← user.deleted
+  ← subscription.changed
+  
+ÉVÉNEMENTS ÉMIS:
+  → companion.created
+  → companion.updated
+  → companion.deleted
+  → companion.evolved
+```
+
+## 3.7 Plan de Développement
+
+### Phase 3.1 : Infrastructure (Semaine 1)
+```
+□ Configuration MongoDB
+□ Modèles de données
+□ Connexion S3/MinIO
+□ Collection templates (1000+ modèles)
+```
+
+### Phase 3.2 : CRUD de Base (Semaine 2)
+```
+□ Création compagnon
+□ Lecture/Mise à jour
+□ Suppression
+□ Gestion multi-compagnons
+□ Tests unitaires
+```
+
+### Phase 3.3 : Personnalisation (Semaine 3)
+```
+□ Customisation apparence
+□ Configuration personnalité
+□ Sélection voix
+□ Upload avatar custom
+□ Tests personnalisation
+```
+
+### Phase 3.4 : Évolution Génétique (Semaine 4)
+```
+□ Algorithme évolution
+□ Job hebdomadaire
+□ Gel de traits
+□ Fusion de compagnons
+□ Tests algorithmes
+```
+
+### Phase 3.5 : Frontend (Semaine 5)
+```
+□ Wizard création compagnon
+□ Éditeur personnalisation
+□ Prévisualisation 3D
+□ Galerie publique
+□ Tests E2E
+```
+
+---
+
+# MODULE 4 : CONVERSATION ENGINE
+
+## 4.1 Description
+Moteur de conversations avec les compagnons IA, incluant la mémoire contextuelle.
+
+## 4.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  CONVERSATION MODULE                                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Chat textuel temps réel (WebSocket)                     │
+│  ✓ Intégration LLM (OpenAI, Anthropic)                     │
+│  ✓ Mémoire court & long terme                              │
+│  ✓ Contexte conversationnel                                │
+│  ✓ Détection d'émotions                                    │
+│  ✓ Historique conversations                                │
+│  ✓ Recherche dans historique                               │
+│  ✓ Conversations éphémères                                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+4.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+ WebFlux (reactive)
+  - Database: MongoDB 7+ (historique)
+  - Cache: Redis (contexte actif)
+  - Vector DB: Pinecone/Weaviate (mémoire sémantique)
+  - WebSocket: Spring WebSocket
+  - LLM: OpenAI API / Anthropic Claude API
+4.4 Schéma MongoDB
+javascript
+// Collection: conversations
+{
+  _id: ObjectId,
+  userId: String,
+  companionId: String,
+  title: String,
+  
+  messages: [
+    {
+      id: String,
+      sender: "USER" | "COMPANION",
+      content: String,
+      type: "TEXT" | "IMAGE" | "AUDIO",
+      metadata: Object,
+      timestamp: ISODate,
+      reactions: [
+        {
+          emoji: String,
+          userId: String
+        }
+      ]
+    }
+  ],
+  
+  context: {
+    topics: [String],
+    emotionalTone: String,
+    lastSummary: String
+  },
+  
+  isEphemeral: Boolean,
+  expiresAt: ISODate,
+  tags: [String],
+  
+  createdAt: ISODate,
+  lastMessageAt: ISODate
+}
+
+// Indexes
+db.conversations.createIndex({ userId: 1, lastMessageAt: -1 });
+db.conversations.createIndex({ companionId: 1 });
+db.conversations.createIndex({ tags: 1 });
+db.conversations.createIndex({ isEphemeral: 1, expiresAt: 1 });
+```
+
+## 4.5 APIs Exposées
+```
+POST   /api/v1/conversations
+GET    /api/v1/conversations/{id}
+DELETE /api/v1/conversations/{id}
+GET    /api/v1/conversations/user/{userId}
+
+POST   /api/v1/conversations/{id}/messages
+GET    /api/v1/conversations/{id}/messages
+DELETE /api/v1/conversations/{id}/messages/{messageId}
+
+GET    /api/v1/conversations/{id}/context
+POST   /api/v1/conversations/{id}/search
+
+POST   /api/v1/conversations/{id}/export
+
+WebSocket: /ws/conversations/{conversationId}
+4.6 Intégration LLM
+java
+@Service
+public class ConversationService {
+    
+    private final OpenAIClient openAIClient;
+    private final VectorDBService vectorDB;
+    private final CompanionService companionService;
+    
+    public Mono<Message> generateResponse(
+            String conversationId, 
+            String userMessage) {
+        
+        return Mono.fromCallable(() -> {
+            // 1. Récupérer contexte
+            Context context = getContext(conversationId);
+            
+            // 2. Récupérer profil compagnon
+            Companion companion = companionService.get(context.companionId);
+            
+            // 3. Recherche mémoire long terme
+            List<Memory> relevantMemories = 
+                vectorDB.search(userMessage, 5);
+            
+            // 4. Construire prompt
+            String systemPrompt = buildSystemPrompt(
+                companion, context, relevantMemories);
+            
+            // 5. Appel LLM
+            String response = openAIClient.complete(
+                systemPrompt, userMessage);
+            
+            // 6. Sauvegarder message
+            Message message = saveMessage(
+                conversationId, "COMPANION", response);
+            
+            // 7. Mettre à jour contexte
+            updateContext(conversationId, message);
+            
+            return message;
+        });
+    }
+}
+```
+
+## 4.7 Plan de Développement
+
+### Phase 4.1 : Infrastructure (Semaine 1)
+```
+□ Configuration MongoDB
+□ Configuration WebSocket
+□ Intégration OpenAI API
+□ Setup Vector DB
+```
+
+### Phase 4.2 : Chat de Base (Semaine 2)
+```
+□ Envoi/réception messages
+□ Connexion WebSocket
+□ Appel LLM simple
+□ Sauvegarde historique
+□ Tests unitaires
+```
+
+### Phase 4.3 : Mémoire & Contexte (Semaine 3)
+```
+□ Système de contexte
+□ Mémoire court terme (Redis)
+□ Mémoire long terme (Vector DB)
+□ Recherche sémantique
+□ Tests mémoire
+```
+
+### Phase 4.4 : Fonctionnalités Avancées (Semaine 4)
+```
+□ Détection émotions
+□ Conversations éphémères
+□ Recherche historique
+□ Export conversations
+□ Tests intégration
+```
+
+### Phase 4.5 : Frontend (Semaine 5)
+```
+□ Interface chat
+□ WebSocket client
+□ Historique conversations
+□ Recherche
+□ Tests E2E
+```
+
+---
+
+# MODULE 5 : MEDIA GENERATION (IMAGES)
+
+## 5.1 Description
+Génération d'images via IA (Stable Diffusion) avec gestion de file d'attente.
+
+## 5.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  IMAGE GENERATION MODULE                                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Génération d'images via prompts                         │
+│  ✓ Styles prédéfinis (réaliste, anime, artistique)         │
+│  ✓ Gestion de file d'attente (Kafka)                       │
+│  ✓ Workers asynchrones                                     │
+│  ✓ Stockage S3/MinIO                                       │
+│  ✓ Galerie utilisateur                                     │
+│  ✓ Organisation par albums                                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+5.3 Stack Technique
+yaml
+Backend:
+  - Language: Java
+Continuer
+
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Database: PostgreSQL 16 (métadonnées)
+  - Queue: Kafka (file d'attente génération)
+  - Storage: S3/MinIO (images)
+  - AI: Stable Diffusion API / Replicate
+  
+Workers:
+  - Language: Python 3.11
+  - Framework: FastAPI
+  - GPU: NVIDIA CUDA support
+  - Libraries: torch, diffusers, transformers
+5.4 Schéma de Base de Données
+sql
+CREATE TABLE generated_images (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    companion_id VARCHAR(255),
+    
+    prompt TEXT NOT NULL,
+    negative_prompt TEXT,
+    style VARCHAR(50),
+    resolution VARCHAR(20),
+    
+    status VARCHAR(20) DEFAULT 'QUEUED',
+    
+    storage_url TEXT,
+    thumbnail_url TEXT,
+    
+    seed INTEGER,
+    parameters JSONB,
+    generation_time_seconds INTEGER,
+    
+    is_favorite BOOLEAN DEFAULT FALSE,
+    is_public BOOLEAN DEFAULT FALSE,
+    
+    tokens_cost INTEGER NOT NULL,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE TABLE image_albums (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    cover_image_id UUID REFERENCES generated_images(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE album_images (
+    album_id UUID REFERENCES image_albums(id) ON DELETE CASCADE,
+    image_id UUID REFERENCES generated_images(id) ON DELETE CASCADE,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (album_id, image_id)
+);
+
+CREATE INDEX idx_images_user ON generated_images(user_id);
+CREATE INDEX idx_images_status ON generated_images(status);
+CREATE INDEX idx_images_created ON generated_images(created_at DESC);
+```
+
+## 5.5 Architecture du Pipeline
+```
+┌────────────────────────────────────────────────────────────────┐
+│                   IMAGE GENERATION PIPELINE                    │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  User Request                                                  │
+│       │                                                        │
+│       ├──→ [API Gateway]                                       │
+│       │         │                                              │
+│       │         ├──→ Validate prompt                           │
+│       │         ├──→ Check tokens balance                      │
+│       │         ├──→ Apply moderation                          │
+│       │         │                                              │
+│       │         ├──→ [Database]                                │
+│       │         │     └─ Insert record (status: QUEUED)       │
+│       │         │                                              │
+│       │         └──→ [Kafka Topic: image.generation.requests] │
+│       │                                                        │
+│       │                                                        │
+│       ├──→ [Generation Worker 1]                               │
+│       │         │                                              │
+│       │         ├──→ Consume from Kafka                        │
+│       │         ├──→ Update status: PROCESSING                 │
+│       │         ├──→ Call Stable Diffusion                     │
+│       │         ├──→ Generate image (10-30s)                   │
+│       │         ├──→ Upload to S3                              │
+│       │         ├──→ Generate thumbnail                        │
+│       │         ├──→ Update database                           │
+│       │         ├──→ Consume tokens                            │
+│       │         └──→ Emit event: image.generated               │
+│       │                                                        │
+│       └──→ [Notification Service]                              │
+│                └─ Notify user (WebSocket/Push)                 │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+5.6 Worker Python (Exemple)
+python
+from fastapi import FastAPI
+from kafka import KafkaConsumer
+import torch
+from diffusers import StableDiffusionPipeline
+import boto3
+
+app = FastAPI()
+
+# Initialisation Stable Diffusion
+pipe = StableDiffusionPipeline.from_pretrained(
+    "runwayml/stable-diffusion-v1-5",
+    torch_dtype=torch.float16
+).to("cuda")
+
+s3_client = boto3.client('s3')
+
+def process_image_generation(request):
+    """
+    Génère une image à partir d'un prompt
+    """
+    try:
+        # 1. Mise à jour statut
+        update_status(request['id'], 'PROCESSING')
+        
+        # 2. Génération
+        image = pipe(
+            prompt=request['prompt'],
+            negative_prompt=request.get('negative_prompt'),
+            width=request['width'],
+            height=request['height'],
+            num_inference_steps=50,
+            guidance_scale=7.5,
+            seed=request.get('seed')
+        ).images[0]
+        
+        # 3. Upload S3
+        image_path = f"images/{request['id']}.png"
+        image.save(f"/tmp/{request['id']}.png")
+        s3_client.upload_file(
+            f"/tmp/{request['id']}.png",
+            'nexusai-images',
+            image_path
+        )
+        
+        # 4. Génération thumbnail
+        thumbnail = image.resize((256, 256))
+        thumbnail_path = f"thumbnails/{request['id']}.png"
+        thumbnail.save(f"/tmp/{request['id']}_thumb.png")
+        s3_client.upload_file(
+            f"/tmp/{request['id']}_thumb.png",
+            'nexusai-images',
+            thumbnail_path
+        )
+        
+        # 5. Mise à jour finale
+        update_status(request['id'], 'COMPLETED', {
+            'storage_url': image_path,
+            'thumbnail_url': thumbnail_path
+        })
+        
+        # 6. Émission événement
+        emit_event('image.generated', request['id'])
+        
+    except Exception as e:
+        update_status(request['id'], 'FAILED', {'error': str(e)})
+
+# Consumer Kafka
+consumer = KafkaConsumer(
+    'image.generation.requests',
+    bootstrap_servers=['kafka:9092']
+)
+
+@app.on_event("startup")
+async def startup():
+    for message in consumer:
+        request = json.loads(message.value)
+        process_image_generation(request)
+```
+
+## 5.7 APIs Exposées
+```
+POST   /api/v1/images/generate
+GET    /api/v1/images/{id}
+DELETE /api/v1/images/{id}
+GET    /api/v1/images/user/{userId}
+
+POST   /api/v1/images/{id}/favorite
+GET    /api/v1/images/{id}/download
+
+POST   /api/v1/albums
+GET    /api/v1/albums/{id}
+PUT    /api/v1/albums/{id}
+DELETE /api/v1/albums/{id}
+
+POST   /api/v1/albums/{id}/images/{imageId}
+DELETE /api/v1/albums/{id}/images/{imageId}
+```
+
+## 5.8 Dépendances
+```
+DÉPENDANCES:
+  → Module 1 (User) : Vérification userId
+  → Module 2 (Payment) : Vérification tokens, consommation
+  → Module 3 (Companion) : Informations compagnon pour contexte
+  → Module 9 (Moderation) : Filtrage prompts
+  
+ÉVÉNEMENTS ÉCOUTÉS:
+  ← user.deleted
+  ← subscription.changed
+  
+ÉVÉNEMENTS ÉMIS:
+  → image.generation.requested
+  → image.generation.started
+  → image.generation.completed
+  → image.generation.failed
+```
+
+## 5.9 Plan de Développement
+
+### Phase 5.1 : Infrastructure (Semaine 1)
+```
+□ Configuration PostgreSQL
+□ Configuration Kafka
+□ Configuration S3/MinIO
+□ Setup GPU workers
+□ Installation Stable Diffusion
+```
+
+### Phase 5.2 : API Core (Semaine 2)
+```
+□ Endpoint génération
+□ Gestion file d'attente
+□ Suivi statuts
+□ Tests unitaires
+```
+
+### Phase 5.3 : Workers (Semaine 3)
+```
+□ Worker Python
+□ Intégration Stable Diffusion
+□ Upload S3
+□ Gestion erreurs
+□ Tests workers
+```
+
+### Phase 5.4 : Galerie (Semaine 4)
+```
+□ Albums
+□ Favoris
+□ Téléchargement
+□ Partage
+□ Tests galerie
+```
+
+### Phase 5.5 : Frontend (Semaine 5)
+```
+□ Interface génération
+□ Prévisualisation
+□ Galerie images
+□ Albums
+□ Tests E2E
+```
+
+---
+
+# MODULE 6 : AUDIO PROCESSING
+
+## 6.1 Description
+Traitement audio, synthèse vocale (TTS) et reconnaissance vocale (STT).
+
+## 6.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  AUDIO PROCESSING MODULE                                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Transcription audio (STT - Whisper)                     │
+│  ✓ Synthèse vocale (TTS - ElevenLabs/Coqui)                │
+│  ✓ Messages vocaux asynchrones                             │
+│  ✓ Appels vocaux temps réel (WebRTC)                       │
+│  ✓ Personnalisation voix compagnon                         │
+│  ✓ Analyse émotionnelle vocale                             │
+│  ✓ Stockage enregistrements                                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+6.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Database: PostgreSQL 16 (métadonnées)
+  - Storage: S3/MinIO (fichiers audio)
+  - WebRTC: Janus Gateway
+  
+AI Services:
+  - STT: OpenAI Whisper API
+  - TTS: ElevenLabs API / Coqui TTS
+  - Emotion: Custom ML model
+6.4 Schéma de Base de Données
+sql
+CREATE TABLE voice_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL,
+    companion_id VARCHAR(255),
+    
+    sender VARCHAR(20) NOT NULL,
+    
+    audio_url TEXT NOT NULL,
+    duration_seconds INTEGER,
+    file_size_bytes BIGINT,
+    
+    transcription TEXT,
+    transcription_language VARCHAR(10),
+    
+    emotion_detected VARCHAR(50),
+    emotion_confidence FLOAT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE voice_calls (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL,
+    companion_id VARCHAR(255),
+    
+    status VARCHAR(20) DEFAULT 'INITIATED',
+    
+    webrtc_session_id VARCHAR(255),
+    
+    started_at TIMESTAMP,
+    ended_at TIMESTAMP,
+    duration_seconds INTEGER,
+    
+    quality_metrics JSONB,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE voice_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    companion_id VARCHAR(255) UNIQUE NOT NULL,
+    
+    provider VARCHAR(50), -- 'ELEVENLABS', 'COQUI', etc.
+    voice_id VARCHAR(255),
+    
+    pitch FLOAT,
+    speed FLOAT,
+    style VARCHAR(50),
+    
+    custom_voice_url TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_voice_messages_conv ON voice_messages(conversation_id);
+CREATE INDEX idx_voice_calls_user ON voice_calls(user_id);
+CREATE INDEX idx_voice_calls_status ON voice_calls(status);
+```
+
+## 6.5 Architecture WebRTC
+```
+┌────────────────────────────────────────────────────────────────┐
+│                   VOICE CALL ARCHITECTURE                      │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  User (WebRTC Client)                                          │
+│       │                                                        │
+│       ├──→ [STUN/TURN Server]                                  │
+│       │         │                                              │
+│       │         └──→ NAT Traversal                             │
+│       │                                                        │
+│       ├──→ [Janus Gateway]                                     │
+│       │         │                                              │
+│       │         ├──→ Audio Stream In                           │
+│       │         │                                              │
+│       │         ├──→ [STT Service]                             │
+│       │         │     └─ Whisper API                           │
+│       │         │           └─ Text Output                     │
+│       │         │                                              │
+│       │         ├──→ [Conversation Engine]                     │
+│       │         │     └─ Generate Response                     │
+│       │         │                                              │
+│       │         ├──→ [TTS Service]                             │
+│       │         │     └─ ElevenLabs/Coqui                      │
+│       │         │           └─ Audio Output                    │
+│       │         │                                              │
+│       │         └──→ Audio Stream Out                          │
+│       │                                                        │
+│       └──→ User hears companion voice                          │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## 6.6 APIs Exposées
+```
+POST   /api/v1/audio/voice-messages
+GET    /api/v1/audio/voice-messages/{id}
+DELETE /api/v1/audio/voice-messages/{id}
+
+POST   /api/v1/audio/transcribe
+POST   /api/v1/audio/synthesize
+
+POST   /api/v1/audio/calls/initiate
+GET    /api/v1/audio/calls/{id}
+POST   /api/v1/audio/calls/{id}/end
+
+GET    /api/v1/audio/voice-profiles/{companionId}
+PUT    /api/v1/audio/voice-profiles/{companionId}
+6.7 Service TTS (Exemple)
+java
+@Service
+public class TextToSpeechService {
+    
+    private final ElevenLabsClient elevenLabsClient;
+    private final S3Service s3Service;
+    
+    public AudioResponse synthesize(
+            String text, 
+            String companionId) {
+        
+        // 1. Récupérer profil vocal
+        VoiceProfile profile = 
+            voiceProfileRepository.findByCompanionId(companionId)
+                .orElseThrow();
+        
+        // 2. Appel ElevenLabs
+        byte[] audioData = elevenLabsClient.textToSpeech(
+            text,
+            profile.getVoiceId(),
+            new VoiceSettings()
+                .stability(0.75f)
+                .similarityBoost(0.75f)
+        );
+        
+        // 3. Upload S3
+        String audioUrl = s3Service.upload(
+            audioData, 
+            "audio/voice-messages",
+            "mp3"
+        );
+        
+        // 4. Retour
+        return AudioResponse.builder()
+            .audioUrl(audioUrl)
+            .duration(calculateDuration(audioData))
+            .build();
+    }
+}
+```
+
+## 6.8 Plan de Développement
+
+### Phase 6.1 : Infrastructure (Semaine 1)
+```
+□ Configuration S3/MinIO
+□ Intégration Whisper API
+□ Intégration ElevenLabs
+□ Setup Janus Gateway
+```
+
+### Phase 6.2 : Messages Vocaux (Semaine 2)
+```
+□ Upload audio
+□ Transcription STT
+□ Synthèse TTS
+□ Tests audio
+```
+
+### Phase 6.3 : Appels Vocaux (Semaine 3)
+```
+□ Configuration WebRTC
+□ Initiation appel
+□ Streaming audio
+□ Tests appels
+```
+
+### Phase 6.4 : Personnalisation (Semaine 4)
+```
+□ Profils vocaux
+□ Clonage de voix
+□ Analyse émotionnelle
+□ Tests personnalisation
+```
+
+### Phase 6.5 : Frontend (Semaine 5)
+```
+□ Interface messages vocaux
+□ Interface appels
+□ Gestion voix
+□ Tests E2E
+```
+
+---
+
+# MODULE 7 : VIDEO GENERATION PIPELINE
+
+## 7.1 Description
+Génération de vidéos personnalisées avec le compagnon (court et avancé 4K).
+
+## 7.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  VIDEO GENERATION MODULE                                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Génération scénario (LLM)                               │
+│  ✓ Génération assets visuels                               │
+│  ✓ Génération audio (dialogues + musique)                  │
+│  ✓ Rendering & composition (FFmpeg)                        │
+│  ✓ Encoding multiple formats                               │
+│  ✓ Support jusqu'à 4K 60fps HDR                            │
+│  ✓ GPU rendering farm                                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+7.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Database: PostgreSQL 16
+  - Queue: Kafka (orchestration pipeline)
+  - Storage: S3/MinIO (vidéos)
+  
+Workers:
+  - Language: Python 3.11
+  - Video: FFmpeg, OpenCV
+  - 3D: Blender (headless)
+  - GPU: NVIDIA CUDA, H.265 NVENC
+  
+AI Services:
+  - Script Gen: GPT-4
+  - Images: Stable Diffusion
+  - TTS: ElevenLabs
+  - Music: Mubert AI
+7.4 Schéma de Base de Données
+sql
+CREATE TABLE generated_videos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    companion_id VARCHAR(255),
+    
+    prompt TEXT NOT NULL,
+    scenario_json JSONB NOT NULL,
+    
+    duration_seconds INTEGER NOT NULL,
+    resolution VARCHAR(20),
+    frame_rate INTEGER,
+    quality VARCHAR(20),
+    
+    status VARCHAR(20) DEFAULT 'QUEUED',
+    current_phase VARCHAR(50),
+    progress_percentage INTEGER DEFAULT 0,
+    
+    storage_url TEXT,
+    thumbnail_urls TEXT[],
+    file_size_mb DECIMAL(10,2),
+    
+    generation_time_minutes INTEGER,
+    
+    is_favorite BOOLEAN DEFAULT FALSE,
+    tokens_cost INTEGER NOT NULL,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE TABLE video_assets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id UUID REFERENCES generated_videos(id) ON DELETE CASCADE,
+    
+    asset_type VARCHAR(50), -- 'BACKGROUND', 'CHARACTER', 'AUDIO'
+    scene_number INTEGER,
+    
+    storage_url TEXT NOT NULL,
+    metadata JSONB,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_videos_user ON generated_videos(user_id);
+CREATE INDEX idx_videos_status ON generated_videos(status);
+CREATE INDEX idx_videos_created ON generated_videos(created_at DESC);
+CREATE INDEX idx_video_assets_video ON video_assets(video_id);
+```
+
+## 7.5 Pipeline Détaillé
+```
+┌────────────────────────────────────────────────────────────────┐
+│               VIDEO GENERATION PIPELINE (7 PHASES)             │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  PHASE 1: User Request                                         │
+│    Input: Prompt, Duration, Quality                            │
+│    Output: Video record (status: QUEUED)                       │
+│    Duration: Instant                                           │
+│                                                                │
+│  PHASE 2: Script Generation (LLM)                              │
+│    Input: User prompt + Companion profile                      │
+│    Output: Structured scenario JSON                            │
+│    Workers: Script Generator Service                           │
+│    Duration: 30-60 seconds                                     │
+│                                                                │
+│  PHASE 3: Asset Generation (Parallel)                          │
+│    ├─ Background Scenes (Stable Diffusion)                     │
+│    ├─ Character Renders (Custom Model)                         │
+│    └─ Audio (TTS + Music AI)                                   │
+│    Workers: Multiple GPU workers                               │
+│    Duration: 2-5 minutes                                       │
+│                                                                │
+│  PHASE 4: Compositing                                          │
+│    Input: All assets                                           │
+│    Process: Layer composition, masking                         │
+│    Workers: Compositing Worker                                 │
+│    Duration: 1-3 minutes                                       │
+│                                                                │
+│  PHASE 5: Rendering                                            │
+│    Input: Composed scenes                                      │
+│    Process: Frame-by-frame rendering                           │
+│    Workers: GPU Rendering Farm                                 │
+│    Duration: 5-20 minutes (depends on quality)                 │
+│                                                                │
+│  PHASE 6: Encoding                                             │
+│    Input: Raw video                                            │
+│    Output: H.265 encoded, multiple formats                     │
+│    Workers: Encoding Worker (NVENC)                            │
+│    Duration: 2-5 minutes                                       │
+│                                                                │
+│  PHASE 7: Finalization                                         │
+│    ├─ Upload to S3                                             │
+│    ├─ Generate thumbnails                                      │
+│    ├─ Update database                                          │
+│    └─ Notify user                                              │
+│    Duration: 1 minute                                          │
+│                                                                │
+│  TOTAL TIME ESTIMATE:                                          │
+│    - Standard (1080p 30fps, 2min): 5-8 minutes                 │
+│    - HD (1080p 60fps, 5min): 10-15 minutes                     │
+│    - 4K Advanced (2160p 60fps HDR, 10min): 40-60 minutes       │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+7.6 Worker Orchestrator (Exemple)
+java
+@Service
+public class VideoGenerationOrchestrator {
+    
+    @KafkaListener(topics = "video.generation.requests")
+    public void orchestrate(VideoRequest request) {
+        
+        try {
+            String videoId = request.getId();
+            
+            // Phase 1: Script Generation
+            updatePhase(videoId, "SCRIPT_GEN");
+            ScenarioJson scenario = scriptGeneratorService
+                .generate(request.getPrompt(), request.getCompanionId());
+            updateScenario(videoId, scenario);
+            
+            // Phase 2: Asset Generation (Parallel)
+            updatePhase(videoId, "ASSET_GEN");
+            CompletableFuture<List<String>> backgrounds = 
+                generateBackgrounds(scenario);
+            CompletableFuture<List<String>> characters = 
+                generateCharacters(scenario);
+            CompletableFuture<String> audio = 
+                generateAudio(scenario);
+            
+            CompletableFuture.allOf(
+                backgrounds, characters, audio
+            ).join();
+            
+            // Phase 3: Rendering
+            updatePhase(videoId, "RENDERING");
+            String rawVideoPath = renderingService.render(
+                videoId,
+                backgrounds.get(),
+                characters.get(),
+                audio.get(),
+                scenario
+            );
+            
+            // Phase 4: Encoding
+            updatePhase(videoId, "ENCODING");
+            String encodedPath = encodingService.encode(
+                rawVideoPath,
+                request.getQuality()
+            );
+            
+            // Phase 5: Finalization
+            String s3Url = s3Service.upload(encodedPath);
+            List<String> thumbnails = generateThumbnails(encodedPath);
+            
+            updateStatus(videoId, "COMPLETED", s3Url, thumbnails);
+            
+            // Notification
+            notificationService.notifyUser(
+                request.getUserId(),
+                "Video ready!",
+                s3Url
+            );
+            
+        } catch (Exception e) {
+            updateStatus(request.getId(), "FAILED");
+            log.error("Video generation failed", e);
+        }
+    }
+}
+```
+
+## 7.7 APIs Exposées
+```
+POST   /api/v1/videos/generate
+GET    /api/v1/videos/{id}
+GET    /api/v1/videos/{id}/status
+DELETE /api/v1/videos/{id}
+GET    /api/v1/videos/user/{userId}
+
+POST   /api/v1/videos/{id}/favorite
+GET    /api/v1/videos/{id}/download
+
+GET    /api/v1/videos/queue-status
+```
+
+## 7.8 Plan de Développement
+
+### Phase 7.1 : Infrastructure (Semaines 1-2)
+```
+□ Configuration GPU farm
+□ Setup Kafka orchestration
+□ Configuration S3
+□ Installation FFmpeg, Blender
+□ Tests performance GPU
+```
+
+### Phase 7.2 : Script Generation (Semaine 3)
+```
+□ Service génération scénario
+□ Intégration GPT-4
+□ Validation JSON
+□ Tests scénarios
+```
+
+### Phase 7.3 : Asset Generation (Semaines 4-5)
+```
+□ Worker backgrounds
+□ Worker personnages
+□ Worker audio
+□ Tests parallèles
+```
+
+### Phase 7.4 : Rendering (Semaines 6-7)
+```
+□ Worker compositing
+□ Worker rendering
+□ Optimisation GPU
+□ Tests qualité
+```
+
+### Phase 7.5 : Encoding (Semaine 8)
+```
+□ Worker encoding
+□ Multiple formats
+□ Tests encodage
+```
+
+### Phase 7.6 : Frontend (Semaine 9)
+```
+□ Interface génération
+□ Suivi progression
+□ Player vidéo
+□ Tests E2E
+```
+
+---
+
+# MODULE 8 : VR SYSTEM
+
+## 8.1 Description
+Système de réalité virtuelle pour interactions immersives avec les compagnons.
+
+## 8.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  VR SYSTEM MODULE                                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Support casques VR (Quest, Index, PSVR2, etc.)          │
+│  ✓ Rendu temps réel 90-120 fps                             │
+│  ✓ Tracking position/rotation                              │
+│  ✓ Hand tracking                                            │
+│  ✓ Retour haptique                                          │
+│  ✓ Audio spatial 3D                                         │
+│  ✓ Environnements personnalisables                         │
+│  ✓ Cloud rendering (optionnel)                             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+8.3 Stack Technique
+yaml
+Client VR:
+  - Engine: Unity 2022 LTS / Unreal Engine 5
+  - Language: C#
+  - VR SDK: OpenXR (cross-platform)
+  - Physics: PhysX
+  - Audio: FMOD / Wwise
+  
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Real-time: WebSocket + WebRTC
+  - Database: PostgreSQL 16
+  
+Cloud Rendering (Optional):
+  - GPU: NVIDIA RTX 4090 / A100
+  - Streaming: NVIDIA CloudXR
+  - Encoding: H.265 NVENC
+```
+
+## 8.4 Architecture VR
+```
+┌────────────────────────────────────────────────────────────────┐
+│                      VR ARCHITECTURE                           │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  VR Headset (Client Unity)                                     │
+│       │                                                        │
+│       ├──→ [Input Manager]                                     │
+│       │     ├─ Head tracking                                   │
+│       │     ├─ Hand tracking                                   │
+│       │     └─ Controller input                                │
+│       │                                                        │
+│       ├──→ [Render Engine]                                     │
+│       │     ├─ 90-120 fps rendering                            │
+│       │     ├─ Foveated rendering                              │
+│       │     └─ Dynamic LOD                                     │
+│       │                                                        │
+│       ├──→ [Audio Engine]                                      │
+│       │     ├─ Spatial 3D audio                                │
+│       │     └─ HRTF processing                                 │
+│       │                                                        │
+│       ├──→ [Avatar System]                                     │
+│       │     ├─ Full body IK                                    │
+│       │     ├─ Facial animation                                │
+│       │     └─ Lip sync                                        │
+│       │                                                        │
+│       └──→ [Network Manager]                                   │
+│             ├─ WebSocket (state sync)                          │
+│             └─ WebRTC (audio)                                  │
+│                                                                │
+│       ↕ WebSocket + WebRTC                                     │
+│                                                                │
+│  Backend VR Services                                           │
+│       │                                                        │
+│       ├──→ [VR Session Manager]                                │
+│       ├──→ [Sync Coordinator]                                  │
+│       ├──→ [Companion AI Controller]                           │
+│       └──→ [Environment Manager]                               │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+8.5 Schéma de Base de Données
+sql
+CREATE TABLE vr_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    companion_id VARCHAR(255),
+    
+    headset_type VARCHAR(50),
+    rendering_mode VARCHAR(
+Continuer
+
+sql
+    rendering_mode VARCHAR(20), -- 'LOCAL', 'CLOUD_STREAM'
+    quality_preset VARCHAR(20), -- 'PERFORMANCE', 'BALANCED', 'ULTRA'
+    
+    started_at TIMESTAMP NOT NULL,
+    ended_at TIMESTAMP,
+    duration_minutes INTEGER,
+    
+    average_fps FLOAT,
+    min_fps FLOAT,
+    latency_ms FLOAT,
+    
+    interactions_count INTEGER DEFAULT 0,
+    hand_tracking_used BOOLEAN DEFAULT FALSE,
+    haptic_feedback_used BOOLEAN DEFAULT FALSE,
+    
+    environment_id VARCHAR(255),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE vr_environments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    
+    scene_data JSONB NOT NULL, -- 3D scene configuration
+    
+    is_public BOOLEAN DEFAULT FALSE,
+    thumbnail_url TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE vr_haptic_devices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    
+    device_type VARCHAR(50), -- 'GLOVE', 'VEST', 'SUIT'
+    manufacturer VARCHAR(100),
+    model VARCHAR(100),
+    
+    connection_status VARCHAR(20),
+    last_connected_at TIMESTAMP,
+    
+    settings JSONB,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_vr_sessions_user ON vr_sessions(user_id);
+CREATE INDEX idx_vr_sessions_started ON vr_sessions(started_at DESC);
+CREATE INDEX idx_vr_environments_user ON vr_environments(user_id);
+CREATE INDEX idx_vr_environments_public ON vr_environments(is_public);
+8.6 Unity Client (Structure)
+csharp
+// VRSessionManager.cs
+using UnityEngine;
+using Unity.XR.CoreUtils;
+using UnityEngine.XR;
+
+public class VRSessionManager : MonoBehaviour
+{
+    private WebSocketClient wsClient;
+    private CompanionAvatarController companion;
+    private HandTrackingController handTracking;
+    
+    void Start()
+    {
+        InitializeVRSession();
+        ConnectToBackend();
+        SpawnCompanion();
+    }
+    
+    void InitializeVRSession()
+    {
+        // Configuration du rendu
+        XRSettings.eyeTextureResolutionScale = 1.2f;
+        Application.targetFrameRate = 90;
+        
+        // Tracking
+        XRDevice.foveatedRenderingLevel = FoveatedRenderingLevel.High;
+        
+        // Audio spatial
+        AudioListener.velocityUpdateMode = 
+            AudioVelocityUpdateMode.Fixed;
+    }
+    
+    void ConnectToBackend()
+    {
+        string sessionToken = AuthManager.Instance.GetToken();
+        
+        wsClient = new WebSocketClient(
+            "wss://api.nexusai.com/vr-sessions",
+            sessionToken
+        );
+        
+        wsClient.OnMessage += HandleServerMessage;
+        wsClient.Connect();
+    }
+    
+    void SpawnCompanion()
+    {
+        string companionId = PlayerPrefs.GetString("activeCompanion");
+        
+        // Charger les données du compagnon
+        CompanionData data = LoadCompanionData(companionId);
+        
+        // Instancier l'avatar
+        GameObject avatarPrefab = Resources.Load<GameObject>(
+            $"Avatars/{data.ModelId}"
+        );
+        
+        GameObject avatarInstance = Instantiate(
+            avatarPrefab,
+            spawnPosition,
+            Quaternion.identity
+        );
+        
+        companion = avatarInstance.GetComponent<CompanionAvatarController>();
+        companion.Initialize(data);
+    }
+    
+    void Update()
+    {
+        // Synchronisation position/rotation
+        SyncTransforms();
+        
+        // Update companion AI
+        companion.UpdateBehavior(Time.deltaTime);
+        
+        // Metrics
+        UpdatePerformanceMetrics();
+    }
+}
+
+// CompanionAvatarController.cs
+public class CompanionAvatarController : MonoBehaviour
+{
+    public Animator animator;
+    public SkinnedMeshRenderer facialMesh;
+    public AudioSource voiceSource;
+    
+    private BehaviorTree behaviorTree;
+    private EmotionStateMachine emotionState;
+    private LipSyncController lipSync;
+    
+    public void Initialize(CompanionData data)
+    {
+        // Appliquer l'apparence
+        ApplyAppearance(data.Appearance);
+        
+        // Initialiser la personnalité
+        behaviorTree = new BehaviorTree(data.Personality);
+        emotionState = new EmotionStateMachine(data.EmotionalState);
+        
+        // Configuration voix
+        voiceSource.clip = LoadVoiceProfile(data.VoiceId);
+    }
+    
+    public void UpdateBehavior(float deltaTime)
+    {
+        // Mise à jour état émotionnel
+        emotionState.Update(deltaTime);
+        
+        // Exécution behavior tree
+        behaviorTree.Tick(deltaTime);
+        
+        // Update animations
+        UpdateAnimations();
+        
+        // Regard vers l'utilisateur
+        LookAtUser();
+    }
+    
+    private void LookAtUser()
+    {
+        Transform headTarget = Camera.main.transform;
+        
+        // Smooth look at
+        Vector3 direction = (headTarget.position - transform.position)
+            .normalized;
+        
+        Quaternion lookRotation = Quaternion.LookRotation(direction);
+        transform.rotation = Quaternion.Slerp(
+            transform.rotation,
+            lookRotation,
+            Time.deltaTime * 2f
+        );
+    }
+}
+
+// HandTrackingController.cs
+public class HandTrackingController : MonoBehaviour
+{
+    private XRHandSubsystem handSubsystem;
+    private HapticFeedbackController haptics;
+    
+    void Start()
+    {
+        handSubsystem = GetHandSubsystem();
+        haptics = GetComponent<HapticFeedbackController>();
+    }
+    
+    void Update()
+    {
+        if (handSubsystem == null) return;
+        
+        // Tracking main gauche
+        UpdateHand(XRNode.LeftHand, leftHandModel);
+        
+        // Tracking main droite
+        UpdateHand(XRNode.RightHand, rightHandModel);
+        
+        // Détection gestes
+        DetectGestures();
+    }
+    
+    private void UpdateHand(XRNode node, HandModel model)
+    {
+        if (handSubsystem.TryGetHandPose(node, out XRHandPose pose))
+        {
+            model.UpdatePose(pose);
+            
+            // Collision detection
+            CheckHandCollisions(model);
+        }
+    }
+    
+    private void CheckHandCollisions(HandModel hand)
+    {
+        Collider[] hits = Physics.OverlapSphere(
+            hand.IndexTipPosition,
+            0.02f,
+            interactableLayer
+        );
+        
+        foreach (Collider hit in hits)
+        {
+            if (hit.CompareTag("CompanionSkin"))
+            {
+                // Retour haptique
+                haptics.TriggerTouch(hand.Type, 0.3f);
+                
+                // Réaction du compagnon
+                companion.OnTouch(hit.ClosestPoint(hand.IndexTipPosition));
+            }
+        }
+    }
+}
+```
+
+## 8.7 APIs Exposées (Backend)
+```
+POST   /api/v1/vr/sessions
+GET    /api/v1/vr/sessions/{id}
+DELETE /api/v1/vr/sessions/{id}
+GET    /api/v1/vr/sessions/active
+
+POST   /api/v1/vr/environments
+GET    /api/v1/vr/environments/{id}
+PUT    /api/v1/vr/environments/{id}
+DELETE /api/v1/vr/environments/{id}
+GET    /api/v1/vr/environments/user/{userId}
+
+POST   /api/v1/vr/haptic-devices
+GET    /api/v1/vr/haptic-devices/{id}
+PUT    /api/v1/vr/haptic-devices/{id}/settings
+
+WebSocket: /ws/vr-sessions/{sessionId}
+```
+
+## 8.8 Plan de Développement
+
+### Phase 8.1 : Setup Unity/Unreal (Semaines 1-2)
+```
+□ Configuration projet VR
+□ Import OpenXR
+□ Configuration builds multi-plateformes
+□ Tests casques (Quest, Index)
+```
+
+### Phase 8.2 : Tracking & Input (Semaine 3)
+```
+□ Head tracking
+□ Hand tracking
+□ Controller input
+□ Tests précision
+```
+
+### Phase 8.3 : Avatar System (Semaines 4-5)
+```
+□ Import/rigging avatars 3D
+□ Full body IK
+□ Facial animation (52 blendshapes)
+□ Lip sync
+□ Tests animations
+```
+
+### Phase 8.4 : Environnements (Semaine 6)
+```
+□ Création environnements 3D
+□ Système de scènes
+□ Éclairage dynamique
+□ Tests performance
+```
+
+### Phase 8.5 : Backend Services (Semaine 7)
+```
+□ VR Session Manager
+□ WebSocket server
+□ Sync coordinator
+□ Tests réseau
+```
+
+### Phase 8.6 : Audio Spatial (Semaine 8)
+```
+□ Configuration FMOD/Wwise
+□ Audio 3D positionnel
+□ HRTF
+□ Tests audio
+```
+
+### Phase 8.7 : Optimisation (Semaine 9)
+```
+□ Foveated rendering
+□ LOD dynamique
+□ Occlusion culling
+□ Tests performance (90+ fps)
+```
+
+### Phase 8.8 : Haptique (Semaine 10)
+```
+□ Intégration dispositifs haptiques
+□ API retour tactile
+□ Tests dispositifs
+```
+
+---
+
+# MODULE 9 : MODERATION SYSTEM
+
+## 9.1 Description
+Système de modération multi-niveaux adapté selon le plan d'abonnement.
+
+## 9.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MODERATION SYSTEM MODULE                                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Filtrage contenu (texte, image, vidéo)                  │
+│  ✓ Modération multi-niveaux (STRICT, LIGHT, OPTIONAL)      │
+│  ✓ Détection contenu inapproprié (ML)                      │
+│  ✓ Détection détresse psychologique                        │
+│  ✓ Gestion incidents & avertissements                      │
+│  ✓ Dashboard modérateurs                                   │
+│  ✓ Logs conformité & audit                                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+9.3 Stack Technique
+yaml
+Backend:
+  - Language: Java 21
+  - Framework: Spring Boot 3.2+
+  - Database: PostgreSQL 16
+  - Cache: Redis
+  - Queue: Kafka (événements)
+  
+AI Services:
+  - Content Moderation: OpenAI Moderation API
+  - Text Analysis: Custom ML models
+  - Image Analysis: AWS Rekognition / Google Vision
+  - CSAM Detection: Microsoft PhotoDNA
+9.4 Schéma de Base de Données
+sql
+CREATE TABLE moderation_incidents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    
+    content_type VARCHAR(50) NOT NULL, -- 'TEXT', 'IMAGE', 'VIDEO'
+    content_hash VARCHAR(64), -- SHA-256 (pas le contenu lui-même)
+    
+    conversation_id VARCHAR(255),
+    message_id VARCHAR(255),
+    
+    incident_type VARCHAR(50) NOT NULL, -- 'SEXUAL', 'VIOLENCE', 'HATE', etc.
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+    
+    confidence FLOAT, -- Score confiance ML
+    moderation_scores JSONB, -- Détails scores IA
+    
+    status VARCHAR(20) DEFAULT 'PENDING',
+    automated BOOLEAN DEFAULT TRUE,
+    
+    reviewed_by UUID REFERENCES users(id),
+    reviewed_at TIMESTAMP,
+    action_taken VARCHAR(100),
+    notes TEXT,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_warnings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    incident_id UUID REFERENCES moderation_incidents(id),
+    
+    warning_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    
+    acknowledged BOOLEAN DEFAULT FALSE,
+    acknowledged_at TIMESTAMP,
+    
+    expires_at TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE moderation_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    moderation_level VARCHAR(20) NOT NULL, -- 'STRICT', 'LIGHT', 'OPTIONAL'
+    content_category VARCHAR(50) NOT NULL,
+    
+    threshold FLOAT NOT NULL, -- Seuil déclenchement
+    action VARCHAR(50) NOT NULL, -- 'BLOCK', 'WARN', 'ALLOW'
+    
+    active BOOLEAN DEFAULT TRUE,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE adult_content_consents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    
+    consent_type VARCHAR(50) NOT NULL,
+    version VARCHAR(10) NOT NULL,
+    
+    ip_address INET NOT NULL,
+    user_agent TEXT,
+    digital_signature TEXT NOT NULL,
+    
+    signed_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP,
+    
+    revoked BOOLEAN DEFAULT FALSE,
+    revoked_at TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_moderation_user ON moderation_incidents(user_id);
+CREATE INDEX idx_moderation_status ON moderation_incidents(status);
+CREATE INDEX idx_moderation_severity ON moderation_incidents(severity);
+CREATE INDEX idx_warnings_user ON user_warnings(user_id);
+CREATE INDEX idx_consents_user ON adult_content_consents(user_id, consent_type);
+9.5 Service de Modération (Exemple)
+java
+@Service
+public class ModerationService {
+    
+    private final OpenAIModerationClient openAIClient;
+    private final PhotoDNAClient photoDNAClient;
+    private final ModerationRulesRepository rulesRepository;
+    
+    public ModerationResult moderateText(
+            String content, 
+            String userId) {
+        
+        // 1. Déterminer niveau modération utilisateur
+        ModerationLevel level = getUserModerationLevel(userId);
+        
+        // 2. Pré-filtrage rapide (blacklist)
+        if (containsBlacklistedTerms(content)) {
+            return ModerationResult.blocked(
+                "BLACKLISTED_TERM",
+                Severity.HIGH
+            );
+        }
+        
+        // 3. Analyse IA
+        OpenAIModerationResponse aiResponse = 
+            openAIClient.moderate(content);
+        
+        // 4. Appliquer règles selon niveau
+        ModerationDecision decision = applyRules(
+            level, 
+            aiResponse
+        );
+        
+        // 5. Si bloqué, créer incident
+        if (decision.isBlocked()) {
+            createIncident(
+                userId,
+                "TEXT",
+                content,
+                aiResponse,
+                decision
+            );
+        }
+        
+        // 6. Détection détresse (toujours actif)
+        if (detectDistress(content, aiResponse)) {
+            triggerWellbeingAlert(userId);
+        }
+        
+        return decision.toResult();
+    }
+    
+    private ModerationLevel getUserModerationLevel(String userId) {
+        User user = userService.getUser(userId);
+        Subscription sub = user.getSubscription();
+        
+        // FREE/STANDARD → STRICT (forcé)
+        if (sub.getPlan().isFreeOrStandard()) {
+            return ModerationLevel.STRICT;
+        }
+        
+        // PREMIUM → STRICT ou LIGHT (choix utilisateur)
+        if (sub.getPlan() == SubscriptionPlan.PREMIUM) {
+            return user.getPreferences()
+                .getModerationLevel();
+        }
+        
+        // VIP+ → Vérifier KYC + consentement
+        if (sub.getPlan() == SubscriptionPlan.VIP_PLUS) {
+            if (hasValidKYC(userId, 3) && 
+                hasActiveConsent(userId, "UNMODERATED_MODE")) {
+                
+                return ModerationLevel.OPTIONAL;
+            }
+        }
+        
+        return ModerationLevel.LIGHT;
+    }
+    
+    private ModerationDecision applyRules(
+            ModerationLevel level,
+            OpenAIModerationResponse aiResponse) {
+        
+        // Récupérer règles pour ce niveau
+        List<ModerationRule> rules = 
+            rulesRepository.findByLevel(level);
+        
+        for (ModerationRule rule : rules) {
+            String category = rule.getContentCategory();
+            float score = aiResponse.getScore(category);
+            
+            // TOUJOURS bloquer contenu illégal
+            if (category.equals("sexual/minors") && score > 0.01) {
+                return ModerationDecision.block(
+                    category,
+                    Severity.CRITICAL,
+                    "ILLEGAL_CONTENT"
+                );
+            }
+            
+            if (category.equals("terrorism") && score > 0.1) {
+                return ModerationDecision.block(
+                    category,
+                    Severity.CRITICAL,
+                    "ILLEGAL_CONTENT"
+                );
+            }
+            
+            // Appliquer seuil selon règle
+            if (score > rule.getThreshold()) {
+                switch (rule.getAction()) {
+                    case BLOCK:
+                        return ModerationDecision.block(
+                            category,
+                            determineSeverity(score)
+                        );
+                    case WARN:
+                        return ModerationDecision.warn(
+                            category,
+                            score
+                        );
+                    case ALLOW:
+                        // Continue checking other rules
+                        break;
+                }
+            }
+        }
+        
+        return ModerationDecision.allow();
+    }
+    
+    private boolean detectDistress(
+            String content,
+            OpenAIModerationResponse aiResponse) {
+        
+        // Patterns suicidaires
+        if (aiResponse.getScore("self-harm") > 0.3) {
+            return true;
+        }
+        
+        // Analyse NLP pour détresse
+        List<String> distressPatterns = Arrays.asList(
+            "je veux mourir",
+            "envie de me suicider",
+            "je ne veux plus vivre",
+            "mettre fin à mes jours"
+        );
+        
+        String lowerContent = content.toLowerCase();
+        for (String pattern : distressPatterns) {
+            if (lowerContent.contains(pattern)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    private void triggerWellbeingAlert(String userId) {
+        // 1. Notification modérateur
+        notificationService.alertModerators(
+            userId,
+            "DISTRESS_DETECTED"
+        );
+        
+        // 2. Message empathique immédiat
+        conversationService.sendSystemMessage(
+            userId,
+            buildWellbeingMessage()
+        );
+        
+        // 3. Ressources aide
+        conversationService.sendSystemMessage(
+            userId,
+            buildHelpResourcesMessage()
+        );
+    }
+}
+```
+
+## 9.6 APIs Exposées
+```
+POST   /api/v1/moderation/text
+POST   /api/v1/moderation/image
+POST   /api/v1/moderation/video
+
+GET    /api/v1/moderation/incidents
+GET    /api/v1/moderation/incidents/{id}
+PUT    /api/v1/moderation/incidents/{id}/review
+
+GET    /api/v1/moderation/warnings/user/{userId}
+POST   /api/v1/moderation/warnings/{id}/acknowledge
+
+POST   /api/v1/moderation/consents
+GET    /api/v1/moderation/consents/active
+DELETE /api/v1/moderation/consents/{id}
+
+GET    /api/v1/moderation/rules
+PUT    /api/v1/moderation/rules/{id}
+```
+
+## 9.7 Plan de Développement
+
+### Phase 9.1 : Infrastructure (Semaine 1)
+```
+□ Configuration PostgreSQL
+□ Intégration OpenAI Moderation
+□ Intégration PhotoDNA
+□ Configuration règles
+```
+
+### Phase 9.2 : Modération Texte (Semaine 2)
+```
+□ Filtrage blacklist
+□ Analyse IA
+□ Système de règles
+□ Tests texte
+```
+
+### Phase 9.3 : Modération Images/Vidéos (Semaine 3)
+```
+□ Analyse images
+□ Détection CSAM
+□ Analyse vidéos
+□ Tests médias
+```
+
+### Phase 9.4 : Gestion Incidents (Semaine 4)
+```
+□ Création incidents
+□ Avertissements
+□ Escalade
+□ Tests workflow
+```
+
+### Phase 9.5 : Détection Détresse (Semaine 5)
+```
+□ Patterns suicidaires
+□ Intervention automatique
+□ Ressources aide
+□ Tests détresse
+```
+
+### Phase 9.6 : Consentements (Semaine 6)
+```
+□ Gestion consentements
+□ Signature numérique
+□ Vérification KYC
+□ Tests conformité
+```
+
+### Phase 9.7 : Dashboard Modérateurs (Semaine 7)
+```
+□ Interface review
+□ Statistiques
+□ Actions modérateurs
+□ Tests dashboard
+```
+
+---
+
+# MODULE 10 : ANALYTICS & MONITORING
+
+## 10.1 Description
+Système d'analytics, métriques, monitoring et observabilité.
+
+## 10.2 Responsabilités
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ANALYTICS & MONITORING MODULE                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ✓ Métriques application (Prometheus)                      │
+│  ✓ Logs centralisés (ELK Stack)                            │
+│  ✓ Tracing distribué (Jaeger)                              │
+│  ✓ Dashboards (Grafana)                                    │
+│  ✓ Alertes automatiques                                    │
+│  ✓ Analytics utilisateurs                                  │
+│  ✓ Rapports business                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+10.3 Stack Technique
+yaml
+Monitoring:
+  - Metrics: Prometheus + Grafana
+  - Logs: Elasticsearch + Logstash + Kibana (ELK)
+  - Tracing: Jaeger
+  - APM: Spring Boot Actuator + Micrometer
+  
+Analytics:
+  - Database: ClickHouse (time-series)
+  - Processing: Apache Flink
+  - Visualization: Metabase / Superset
+10.4 Schéma ClickHouse (Analytics)
+sql
+CREATE TABLE user_events (
+    event_id UUID,
+    user_id UUID,
+    event_type String,
+    event_data String, -- JSON
+    
+    timestamp DateTime,
+    session_id UUID,
+    
+    device_type String,
+    platform String,
+    app_version String,
+    
+    ip_address IPv4,
+    country String,
+    city String
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (user_id, timestamp);
+
+CREATE TABLE system_metrics (
+    metric_name String,
+    metric_value Float64,
+    tags String, -- JSON
+    
+    timestamp DateTime,
+    
+    service_name String,
+    instance_id String
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (metric_name, timestamp);
+10.5 Configuration Prometheus (Exemple)
+yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:8080']
+    metrics_path: '/actuator/prometheus'
+    
+  - job_name: 'companion-service'
+    static_configs:
+      - targets: ['companion-service:8081']
+    metrics_path: '/actuator/prometheus'
+    
+  - job_name: 'conversation-service'
+    static_configs:
+      - targets: ['conversation-service:8082']
+    metrics_path: '/actuator/prometheus'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - 'alerts.yml'
+10.6 Alertes (Exemple)
+yaml
+# alerts.yml
+groups:
+  - name: nexusai_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "{{ $labels.service }} has {{ $value }}% errors"
+      
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+          description: "{{ $labels.job }} is down"
+      
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency"
+          description: "P95 latency is {{ $value }}s"
+      
+      - alert: LowTokenBalance
+        expr: token_wallet_balance < 10
+        labels:
+          severity: info
+        annotations:
+          summary: "User low on tokens"
+10.7 Dashboard Grafana (JSON)
+json
+{
+  "dashboard": {
+    "title": "NexusAI Overview",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (service)"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (service)"
+          }
+        ]
+      },
+      {
+        "title": "P95 Latency",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service))"
+          }
+        ]
+      },
+      {
+        "title": "Active Users",
+        "targets": [
+          {
+            "expr": "count(count by (user_id) (user_events{event_type=\"session_start\"} offset 1h))"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## 10.8 Plan de Développement
+
+### Phase 10.1 : Prometheus & Grafana (Semaine 1)
+```
+□ Installation Prometheus
+□ Configuration scraping
+□ Installation Grafana
+□ Dashboards de base
+```
+
+### Phase 10.2 : ELK Stack (Semaine 2)
+```
+□ Installation Elasticsearch
+□ Configuration Logstash
+□ Installation Kibana
+□ Dashboards logs
+```
+
+### Phase 10.3 : Jaeger (Semaine 3)
+```
+□ Installation Jaeger
+□ Instrumentation services
+□ Tests tracing
+```
+
+### Phase 10.4 : Analytics (Semaine 4)
+```
+□ Installation ClickHouse
+□ Collecte événements
+□ Rapports business
+```
+
+### Phase 10.5 : Alertes (Semaine 5)
+```
+□ Configuration Alertmanager
+□ Définition alertes
+□ Tests notifications
+```
+
+---
+
+# ORDRE DE DÉVELOPPEMENT RECOMMANDÉ
+
+## Stratégie d'Implémentation Progressive
+```
+┌────────────────────────────────────────────────────────────────┐
+│              ORDRE DE DÉVELOPPEMENT MODULAIRE                  │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  PHASE 1: FONDATIONS (Mois 1-2)                                │
+│  ├─ Module 1: User Management [5 semaines]                     │
+│  ├─ Module 2: Payment System [5 semaines]                      │
+│  └─ Module 10: Analytics (setup de base) [2 semaines]          │
+│                                                                │
+│  PHASE 2: CORE FEATURES (Mois 3-4)                             │
+│  ├─ Module 3: Companion Management [5 semaines]                │
+│  ├─ Module 4: Conversation Engine [5 semaines]                 │
+│  └─ Module 9: Moderation (setup de base) [3 semaines]          │
+│                                                                │
+│  PHASE 3: MEDIA (Mois 5-6)                                     │
+│  ├─ Module 5: Image Generation [5 semaines]                    │
+│  ├─ Module 6: Audio Processing [5 semaines]                    │
+│  └─ Module 9: Moderation (completion) [4 semaines]             │
+│                                                                │
+│  PHASE 4: ADVANCED (Mois 7-10)                                 │
+│  ├─ Module 7: Video Generation [9 semaines]                    │
+│  ├─ Module 8: VR System [10 semaines]                          │
+│  └─ Module 10: Analytics (completion) [3 semaines]             │
+│                                                                │
+│  TOTAL TEMPS ESTIMÉ: 10 MOIS                                   │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+STRATÉGIE D'INTÉGRATION
+12.1 Tests d'RéessayerBContinuer12.1 Tests d'Intégration
+┌────────────────────────────────────────────────────────────────┐
+│                    STRATÉGIE D'INTÉGRATION                     │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  NIVEAU 1: Tests Unitaires (par module)                        │
+│  ├─ Coverage minimum: 80%                                      │
+│  ├─ JUnit 5 + Mockito                                          │
+│  └─ Exécution: CI/CD à chaque commit                           │
+│                                                                │
+│  NIVEAU 2: Tests d'Intégration (inter-modules)                 │
+│  ├─ TestContainers (PostgreSQL, MongoDB, Redis, Kafka)         │
+│  ├─ WireMock pour APIs externes                                │
+│  └─ Exécution: CI/CD avant merge                               │
+│                                                                │
+│  NIVEAU 3: Tests E2E (système complet)                         │
+│  ├─ Cypress / Playwright (frontend)                            │
+│  ├─ REST Assured (backend)                                     │
+│  └─ Exécution: Quotidienne + avant release                     │
+│                                                                │
+│  NIVEAU 4: Tests de Performance                                │
+│  ├─ JMeter / Gatling                                           │
+│  ├─ Objectif: 10,000+ utilisateurs simultanés                  │
+│  └─ Exécution: Hebdomadaire + avant release majeure            │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+12.2 Configuration Docker Compose (Développement)
+yaml# docker-compose.yml
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════════
+  # INFRASTRUCTURE
+  # ═══════════════════════════════════════════════════════
+  
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexusai-postgres
+    environment:
+      POSTGRES_DB: nexusai
+      POSTGRES_USER: nexusai
+      POSTGRES_PASSWORD: nexusai123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nexusai-network
+  
+  mongodb:
+    image: mongo:7
+    container_name: nexusai-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: nexusai
+      MONGO_INITDB_ROOT_PASSWORD: nexusai123
+      MONGO_INITDB_DATABASE: nexusai
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - nexusai-network
+  
+  redis:
+    image: redis:7-alpine
+    container_name: nexusai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nexusai-network
+  
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: nexusai-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - nexusai-network
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: nexusai-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - nexusai-network
+  
+  minio:
+    image: minio/minio:latest
+    container_name: nexusai-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: nexusai
+      MINIO_ROOT_PASSWORD: nexusai123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - nexusai-network
+  
+  # ═══════════════════════════════════════════════════════
+  # MONITORING
+  # ═══════════════════════════════════════════════════════
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nexusai-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - nexusai-network
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nexusai-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - nexusai-network
+  
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: nexusai-jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    networks:
+      - nexusai-network
+  
+  # ═══════════════════════════════════════════════════════
+  # MICROSERVICES
+  # ═══════════════════════════════════════════════════════
+  
+  user-service:
+    build:
+      context: ./nexus-auth
+      dockerfile: Dockerfile
+    container_name: nexusai-user-service
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nexusai
+      SPRING_REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - nexusai-network
+  
+  payment-service:
+    build:
+      context: ./nexus-payment
+      dockerfile: Dockerfile
+    container_name: nexusai-payment-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nexusai
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      STRIPE_API_KEY: ${STRIPE_API_KEY}
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - nexusai-network
+  
+  companion-service:
+    build:
+      context: ./nexus-companion
+      dockerfile: Dockerfile
+    container_name: nexusai-companion-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://nexusai:nexusai123@mongodb:27017/nexusai
+      SPRING_REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MINIO_URL: http://minio:9000
+    depends_on:
+      - mongodb
+      - redis
+      - kafka
+      - minio
+    networks:
+      - nexusai-network
+  
+  conversation-service:
+    build:
+      context: ./nexus-conversation
+      dockerfile: Dockerfile
+    container_name: nexusai-conversation-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://nexusai:nexusai123@mongodb:27017/nexusai
+      SPRING_REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+      - kafka
+    networks:
+      - nexusai-network
+  
+  api-gateway:
+    build:
+      context: ./nexus-api
+      dockerfile: Dockerfile
+    container_name: nexusai-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_REDIS_HOST: redis
+    depends_on:
+      - redis
+      - user-service
+      - payment-service
+      - companion-service
+      - conversation-service
+    networks:
+      - nexusai-network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  nexusai-network:
+    driver: bridge
+12.3 Pipeline CI/CD (GitHub Actions)
+yaml# .github/workflows/ci-cd.yml
+name: NexusAI CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # ═══════════════════════════════════════════════════════
+  # BUILD & TEST
+  # ═══════════════════════════════════════════════════════
+  
+  test-user-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+      
+      - name: Run tests
+        working-directory: ./nexus-auth
+        run: mvn clean test
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./nexus-auth/target/site/jacoco/jacoco.xml
+  
+  test-companion-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Run tests
+        working-directory: ./nexus-companion
+        run: mvn clean test
+  
+  # [Répéter pour chaque microservice]
+  
+  # ═══════════════════════════════════════════════════════
+  # INTEGRATION TESTS
+  # ═══════════════════════════════════════════════════════
+  
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [test-user-service, test-companion-service]
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      mongodb:
+        image: mongo:7
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      
+      - name: Run integration tests
+        run: mvn verify -P integration-tests
+  
+  # ═══════════════════════════════════════════════════════
+  # BUILD DOCKER IMAGES
+  # ═══════════════════════════════════════════════════════
+  
+  build-images:
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Build and push user-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./nexus-auth
+          push: true
+          tags: nexusai/user-service:${{ github.sha }}
+      
+      - name: Build and push companion-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./nexus-companion
+          push: true
+          tags: nexusai/companion-service:${{ github.sha }}
+      
+      # [Répéter pour chaque service]
+  
+  # ═══════════════════════════════════════════════════════
+  # DEPLOY TO STAGING
+  # ═══════════════════════════════════════════════════════
+  
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Deploy to Kubernetes (Staging)
+        uses: azure/k8s-deploy@v4
+        with:
+          manifests: |
+            k8s/staging/
+          images: |
+            nexusai/user-service:${{ github.sha }}
+            nexusai/companion-service:${{ github.sha }}
+          kubectl-version: 'latest'
+  
+  # ═══════════════════════════════════════════════════════
+  # DEPLOY TO PRODUCTION
+  # ═══════════════════════════════════════════════════════
+  
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+      - name: Deploy to Kubernetes (Production)
+        uses: azure/k8s-deploy@v4
+        with:
+          manifests: |
+            k8s/production/
+          images: |
+            nexusai/user-service:${{ github.sha }}
+            nexusai/companion-service:${{ github.sha }}
+          kubectl-version: 'latest'
+      
+      - name: Run smoke tests
+        run: |
+          curl https://api.nexusai.com/health
+12.4 Configuration Kubernetes (Production)
+yaml# k8s/production/user-service-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: nexusai-production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: nexusai/user-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: SPRING_DATASOURCE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secrets
+              key: postgres-url
+        - name: SPRING_REDIS_HOST
+          value: "redis-service"
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-service:9092"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: nexusai-production
+spec:
+  selector:
+    app: user-service
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-service-hpa
+  namespace: nexusai-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+12.5 Gestion des Secrets
+yaml# k8s/production/secrets.yaml (chiffré avec Sealed Secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: database-secrets
+  namespace: nexusai-production
+type: Opaque
+data:
+  postgres-url: <base64-encoded>
+  postgres-user: <base64-encoded>
+  postgres-password: <base64-encoded>
+  mongodb-uri: <base64-encoded>
+  redis-password: <base64-encoded>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-keys
+  namespace: nexusai-production
+type: Opaque
+data:
+  openai-api-key: <base64-encoded>
+  stripe-api-key: <base64-encoded>
+  elevenlabs-api-key: <base64-encoded>
+```
+
+## 12.6 Stratégie de Déploiement
+```
+┌────────────────────────────────────────────────────────────────┐
+│                   STRATÉGIE DE DÉPLOIEMENT                     │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  1. DÉPLOIEMENT BLUE/GREEN                                     │
+│     ├─ Maintien de 2 environnements identiques                 │
+│     ├─ Déploiement sur environnement inactif                   │
+│     ├─ Tests sur environnement inactif                         │
+│     └─ Bascule du trafic (rollback rapide si problème)         │
+│                                                                │
+│  2. DÉPLOIEMENT CANARY                                         │
+│     ├─ Déploiement nouvelle version (10% trafic)               │
+│     ├─ Monitoring métriques (15 minutes)                       │
+│     ├─ Augmentation progressive (25%, 50%, 100%)               │
+│     └─ Rollback automatique si erreurs détectées               │
+│                                                                │
+│  3. ROLLBACK AUTOMATIQUE                                       │
+│     Triggers:                                                  │
+│     ├─ Error rate > 5% pendant 5 minutes                       │
+│     ├─ P95 latency > 2 secondes pendant 5 minutes              │
+│     ├─ CPU/Memory > 90% pendant 10 minutes                     │
+│     └─ Health checks échouent > 3 fois                         │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+# RÉSUMÉ EXÉCUTIF
+
+## Timeline Globale
+```
+MOIS 1-2:  Fondations (User, Payment, Analytics setup)
+MOIS 3-4:  Core Features (Companion, Conversation, Moderation)
+MOIS 5-6:  Media (Images, Audio, Moderation completion)
+MOIS 7-10: Advanced (Video, VR, Analytics completion)
+
+MVP Release: Fin Mois 4
+Full Release: Fin Mois 10
+```
+
+## Équipe Recommandée
+```
+┌────────────────────────────────────────────────────────────────┐
+│                      ÉQUIPE NÉCESSAIRE                         │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  Backend Developers:        5-6 personnes (Java/Spring Boot)   │
+│  Frontend Developers:       3-4 personnes (React/TypeScript)   │
+│  DevOps Engineers:          2 personnes (Kubernetes/Docker)    │
+│  ML Engineers:              2-3 personnes (Python/PyTorch)     │
+│  Unity/VR Developers:       2 personnes (C#/Unity)             │
+│  QA Engineers:              2 personnes                        │
+│  Product Manager:           1 personne                         │
+│  Tech Lead/Architect:       1 personne                         │
+│                                                                │
+│  TOTAL: 18-21 personnes                                        │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## Coûts Infrastructure Mensuels Estimés
+```
+┌────────────────────────────────────────────────────────────────┐
+│                  COÛTS INFRASTRUCTURE                          │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  Kubernetes Cluster (AWS/GCP):        $2,000/mois              │
+│  Bases de données (managed):          $1,500/mois              │
+│  Storage S3:                          $500/mois                │
+│  GPU Workers (images/video):          $3,000/mois              │
+│  CDN (CloudFlare):                    $200/mois                │
+│  Monitoring (Grafana Cloud):          $300/mois                │
+│  APIs externes (OpenAI, Stripe):      $2,000/mois              │
+│                                                                │
+│  TOTAL: ~$9,500/mois (10,000 users actifs)                     │
+│                                                                │
+│  Scale: $15-20K/mois pour 100,000 users                        │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+
+FIN DU PLAN DE DÉVELOPPEMENT MODULAIRE
+Ce document fournit une feuille de route complète pour le développement modulaire et indépendant de NexusAI, permettant à plusieurs équipes de travailler en parallèle tout en maintenant la cohérence du système global.

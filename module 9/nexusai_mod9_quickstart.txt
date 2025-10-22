@@ -1,0 +1,484 @@
+# 🚀 Guide de Démarrage Rapide - Module 9 : Moderation System
+
+## Pour les nouveaux développeurs
+
+Ce guide vous permettra de démarrer rapidement sur le Module 9 de NexusAI.
+
+---
+
+## 📋 Checklist d'installation (5 minutes)
+
+```bash
+# 1. Vérifier les prérequis
+java -version    # Java 21+ requis
+mvn -version     # Maven 3.9+ requis
+docker --version # Docker requis
+
+# 2. Cloner le projet
+git clone https://github.com/nexusai/nexus-moderation.git
+cd nexus-moderation
+
+# 3. Lancer les dépendances
+docker-compose up -d
+
+# 4. Créer le fichier .env
+cp .env.example .env
+# Éditer .env avec vos clés API
+
+# 5. Compiler et lancer
+mvn clean install
+mvn spring-boot:run
+
+# 6. Vérifier que ça fonctionne
+curl http://localhost:8084/actuator/health
+```
+
+✅ Si vous voyez `{"status":"UP"}`, c'est bon !
+
+---
+
+## 🎯 Votre première contribution
+
+### Étape 1 : Comprendre la structure
+
+```
+nexus-moderation/
+├── src/main/java/com/nexusai/moderation/
+│   ├── controller/         ← REST APIs
+│   ├── service/           ← Logique métier (VOTRE CODE ICI)
+│   ├── model/             ← Entités et DTOs
+│   └── repository/        ← Accès base de données
+├── src/main/resources/
+│   ├── application.yml    ← Configuration
+│   └── db/migration/      ← Scripts SQL (Flyway)
+└── src/test/             ← Tests (OBLIGATOIRE)
+```
+
+### Étape 2 : Choisir votre tâche
+
+Selon votre numéro de développeur :
+
+```
+👤 Dev 1 : Core Moderation (TextModerationService)
+👤 Dev 2 : Media Moderation (ImageModerationService)
+👤 Dev 3 : Detection (DistressDetectionService)
+👤 Dev 4 : Incidents (IncidentManagementService)
+👤 Dev 5 : Consent (ConsentManagementService)
+👤 Dev 6 : Infrastructure (Controllers, Config)
+```
+
+### Étape 3 : Créer votre branche
+
+```bash
+# Format : feature/MOD9-<numéro>-<description>
+git checkout -b feature/MOD9-123-add-image-moderation
+```
+
+### Étape 4 : Écrire le code
+
+**Exemple** : Ajouter une méthode dans un service
+
+```java
+package com.nexusai.moderation.service.moderation;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+/**
+ * Service de modération d'images.
+ * 
+ * Analyse les images avec AWS Rekognition et PhotoDNA
+ * pour détecter du contenu inapproprié.
+ * 
+ * @author Votre Nom
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ImageModerationService {
+    
+    private final RekognitionClient rekognitionClient;
+    private final PhotoDNAClient photoDNAClient;
+    
+    /**
+     * Modère une image.
+     * 
+     * @param imageUrl URL de l'image
+     * @param userId ID utilisateur
+     * @return Résultat de modération
+     */
+    public ModerationResponse moderateImage(String imageUrl, String userId) {
+        log.info("Moderating image for user: {}", userId);
+        
+        // TODO: Implémenter la logique
+        
+        return ModerationResponse.allowed();
+    }
+}
+```
+
+### Étape 5 : Écrire les tests
+
+**OBLIGATOIRE** : Chaque méthode publique doit avoir un test !
+
+```java
+package com.nexusai.moderation.service.moderation;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class ImageModerationServiceTest {
+    
+    @Mock
+    private RekognitionClient rekognitionClient;
+    
+    @Mock
+    private PhotoDNAClient photoDNAClient;
+    
+    @InjectMocks
+    private ImageModerationService service;
+    
+    @Test
+    void testModerateImage_CleanImage_ShouldAllow() {
+        // Arrange
+        String imageUrl = "https://example.com/clean.jpg";
+        String userId = "user-123";
+        
+        when(rekognitionClient.analyze(imageUrl))
+            .thenReturn(createCleanResult());
+        
+        // Act
+        ModerationResponse response = service.moderateImage(imageUrl, userId);
+        
+        // Assert
+        assertThat(response.isAllowed()).isTrue();
+    }
+}
+```
+
+### Étape 6 : Lancer les tests
+
+```bash
+# Tests unitaires
+mvn test
+
+# Vérifier le coverage
+mvn jacoco:report
+open target/site/jacoco/index.html
+```
+
+🎯 **Objectif** : Coverage minimum 80%
+
+### Étape 7 : Commit & Push
+
+```bash
+# Vérifier les changements
+git status
+
+# Ajouter vos fichiers
+git add src/main/java/com/nexusai/moderation/service/moderation/ImageModerationService.java
+git add src/test/java/com/nexusai/moderation/service/moderation/ImageModerationServiceTest.java
+
+# Commit avec message explicite
+git commit -m "MOD9-123: Add image moderation service
+
+- Implement moderateImage() method
+- Add Rekognition client integration
+- Add PhotoDNA CSAM detection
+- Add unit tests (coverage: 85%)"
+
+# Push
+git push origin feature/MOD9-123-add-image-moderation
+```
+
+### Étape 8 : Créer une Pull Request
+
+1. Aller sur GitHub
+2. Cliquer "Compare & pull request"
+3. Remplir le template :
+
+```markdown
+## Description
+Ajoute le service de modération d'images avec détection CSAM.
+
+## Changements
+- ✅ ImageModerationService
+- ✅ Tests unitaires
+- ✅ Documentation JavaDoc
+
+## Tests
+- [x] Tests unitaires passent
+- [x] Coverage > 80%
+- [x] Tests d'intégration passent
+
+## Screenshots
+N/A (API backend)
+
+## Checklist
+- [x] Code formaté selon Google Style
+- [x] JavaDoc complète
+- [x] Tests écrits
+- [x] Pas de secrets dans le code
+```
+
+4. Demander une review à 2 collègues
+5. Corriger les commentaires
+6. Merge après approbation ! 🎉
+
+---
+
+## 🐛 Debugging courant
+
+### Problème : L'application ne démarre pas
+
+**Erreur** : `Connection refused: postgres`
+
+**Solution** :
+```bash
+# Vérifier que Docker tourne
+docker ps
+
+# Redémarrer les conteneurs
+docker-compose down
+docker-compose up -d
+
+# Attendre 10 secondes
+sleep 10
+
+# Relancer l'app
+mvn spring-boot:run
+```
+
+### Problème : Tests qui échouent
+
+**Erreur** : `org.testcontainers.containers.ContainerLaunchException`
+
+**Solution** :
+```bash
+# Vérifier que Docker est actif
+docker info
+
+# Pull les images nécessaires
+docker pull postgres:16-alpine
+docker pull confluentinc/cp-kafka:7.5.0
+
+# Relancer les tests
+mvn test
+```
+
+### Problème : OpenAI API timeout
+
+**Erreur** : `SocketTimeoutException: Read timed out`
+
+**Solution** :
+```yaml
+# Dans application.yml
+moderation:
+  openai:
+    timeout: 10000  # Augmenter à 10 secondes
+```
+
+---
+
+## 📚 Ressources utiles
+
+### Documentation interne
+
+- 📖 [Architecture complète](./docs/architecture.md)
+- 🔧 [Guide de contribution](./CONTRIBUTING.md)
+- 🧪 [Stratégie de tests](./docs/testing-strategy.md)
+- 🐳 [Guide Docker](./docs/docker-guide.md)
+
+### Liens externes
+
+- [OpenAI Moderation API](https://platform.openai.com/docs/guides/moderation)
+- [AWS Rekognition](https://docs.aws.amazon.com/rekognition/)
+- [Spring Boot Docs](https://docs.spring.io/spring-boot/docs/current/reference/html/)
+- [Testcontainers](https://www.testcontainers.org/)
+
+### Outils recommandés
+
+- **IDE** : IntelliJ IDEA Ultimate (licence fournie)
+- **DB Client** : DBeaver ou pgAdmin
+- **API Testing** : Postman ou Insomnia
+- **Git GUI** : SourceTree ou GitKraken
+
+---
+
+## 💡 Conseils de pro
+
+### 1. Utilisez les logs intelligemment
+
+```java
+// ❌ Mauvais
+log.info("Method called");
+
+// ✅ Bon
+log.debug("Moderating text for user: {}, length: {}", userId, content.length());
+log.warn("High confidence inappropriate content: {} (score: {})", category, score);
+log.error("Failed to call OpenAI API", exception);
+```
+
+### 2. Gérez les exceptions proprement
+
+```java
+// ❌ Mauvais
+try {
+    openAIClient.moderate(text);
+} catch (Exception e) {
+    return null; // 😱
+}
+
+// ✅ Bon
+try {
+    return openAIClient.moderate(text);
+} catch (OpenAIException e) {
+    log.error("OpenAI moderation failed", e);
+    throw new ModerationException("Moderation service unavailable", e);
+}
+```
+
+### 3. Écrivez des tests lisibles
+
+```java
+// ❌ Mauvais
+@Test
+void test1() {
+    assertEquals(true, service.method("input"));
+}
+
+// ✅ Bon
+@Test
+void testModerateText_CleanContent_ShouldAllow() {
+    // Arrange
+    String cleanContent = "Hello world";
+    
+    // Act
+    ModerationResponse response = service.moderateText(cleanContent, userId);
+    
+    // Assert
+    assertThat(response.isAllowed()).isTrue();
+}
+```
+
+### 4. Documentez votre code
+
+```java
+/**
+ * Modère du contenu textuel.
+ * 
+ * Cette méthode :
+ * 1. Vérifie la blacklist
+ * 2. Appelle l'API OpenAI
+ * 3. Applique les règles de modération
+ * 4. Détecte la détresse psychologique
+ * 
+ * @param content Le texte à modérer (non null)
+ * @param userId ID de l'utilisateur (format UUID)
+ * @param conversationId ID de la conversation (peut être null)
+ * @return Résultat de la modération (jamais null)
+ * @throws ModerationException si l'API est indisponible
+ */
+public ModerationResponse moderateText(
+        String content, 
+        String userId, 
+        String conversationId) {
+    // ...
+}
+```
+
+---
+
+## 🎓 Formation recommandée
+
+### Semaine 1 : Onboarding
+- [ ] Lire la documentation complète
+- [ ] Setup environnement local
+- [ ] Lancer les tests et comprendre le coverage
+- [ ] Faire une petite PR (fix typo, amélioration doc)
+
+### Semaine 2 : Développement
+- [ ] Implémenter votre premier service
+- [ ] Écrire les tests associés
+- [ ] Review de code d'un collègue
+- [ ] Participer à la daily standup
+
+### Semaine 3 : Autonomie
+- [ ] Prendre une tâche complexe
+- [ ] Faire des tests d'intégration
+- [ ] Optimiser les performances
+- [ ] Aider un nouveau développeur
+
+---
+
+## 🤝 Qui contacter ?
+
+| Question | Contact | Canal |
+|----------|---------|-------|
+| Architecture | @tech-lead | #moderation-arch |
+| Bugs | @qa-team | #moderation-bugs |
+| Déploiement | @devops | #deployments |
+| APIs externes | @api-team | #external-apis |
+| Questions générales | Toute l'équipe | #moderation-general |
+
+---
+
+## ✅ Checklist journalière
+
+Chaque matin :
+```bash
+# 1. Pull les derniers changements
+git checkout develop
+git pull origin develop
+
+# 2. Mettre à jour votre branche
+git checkout feature/MOD9-XXX
+git rebase develop
+
+# 3. Lancer les tests
+mvn clean test
+
+# 4. Commencer à coder ! 🚀
+```
+
+Chaque soir :
+```bash
+# 1. Commit votre travail
+git add .
+git commit -m "WIP: description"
+
+# 2. Push (backup)
+git push origin feature/MOD9-XXX
+
+# 3. Mettre à jour le ticket Jira
+# Status: "In Progress" → "Ready for Review"
+```
+
+---
+
+## 🎉 Félicitations !
+
+Vous êtes maintenant prêt à contribuer au Module 9 ! 
+
+**N'oubliez pas** :
+- 💬 Poser des questions (aucune question n'est bête)
+- 🧪 Tester, tester, tester
+- 📝 Documenter votre code
+- 🤝 Aider vos collègues
+- 🎯 S'amuser en codant !
+
+**Bon développement ! 🚀**
+
+---
+
+**Dernière mise à jour** : 21 octobre 2025  
+**Auteur** : NexusAI Moderation Team  
+**Version** : 1.0.0

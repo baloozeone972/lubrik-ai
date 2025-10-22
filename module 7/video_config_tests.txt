@@ -1,0 +1,465 @@
+# application.yml - Configuration Spring Boot
+
+spring:
+  application:
+    name: nexus-video-generation
+  
+  # Configuration base de données PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nexusai
+    username: nexusai
+    password: nexusai123
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # Configuration JPA/Hibernate
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+  
+  # Configuration Kafka
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: video-generation-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+  
+  # Configuration Redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 3000ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+# Configuration AWS S3
+aws:
+  region: eu-west-1
+  s3:
+    bucket:
+      videos: nexusai-videos-prod
+      assets: nexusai-video-assets-prod
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID}
+    secret-key: ${AWS_SECRET_ACCESS_KEY}
+
+# Configuration spécifique au module vidéo
+video:
+  cost:
+    base-per-second: 5          # Coût de base par seconde
+  queue:
+    max-size: 100               # Taille maximale de la file
+  generation:
+    timeout-minutes: 60         # Timeout de génération
+  workers:
+    count: 3                    # Nombre de workers par défaut
+
+# Configuration des services externes
+external-services:
+  payment-service:
+    base-url: http://localhost:8081
+    timeout: 5000
+  companion-service:
+    base-url: http://localhost:8082
+    timeout: 5000
+  openai:
+    api-key: ${OPENAI_API_KEY}
+    base-url: https://api.openai.com/v1
+  elevenlabs:
+    api-key: ${ELEVENLABS_API_KEY}
+    base-url: https://api.elevenlabs.io/v1
+
+# Configuration Actuator (monitoring)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    export:
+      prometheus:
+        enabled: true
+
+# Configuration OpenAPI/Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+
+# Configuration logs
+logging:
+  level:
+    com.nexusai.video: DEBUG
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/video-service.log
+    max-size: 10MB
+    max-history: 30
+
+---
+# Profil Docker
+spring:
+  config:
+    activate:
+      on-profile: docker
+  
+  datasource:
+    url: jdbc:postgresql://postgres:5432/nexusai
+  
+  data:
+    redis:
+      host: redis
+  
+  kafka:
+    bootstrap-servers: kafka:9092
+
+aws:
+  s3:
+    endpoint: http://minio:9000    # MinIO pour dev
+
+---
+# Profil Test
+spring:
+  config:
+    activate:
+      on-profile: test
+  
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+---
+# Tests Unitaires (Java/JUnit 5)
+# Fichier: VideoServiceTest.java
+
+package com.nexusai.video.service;
+
+import com.nexusai.video.domain.entity.GeneratedVideo;
+import com.nexusai.video.dto.VideoGenerationRequestDto;
+import com.nexusai.video.dto.VideoGenerationResponseDto;
+import com.nexusai.video.exception.InsufficientTokensException;
+import com.nexusai.video.repository.GeneratedVideoRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Tests unitaires pour le VideoService.
+ * 
+ * @author NexusAI Team
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Video Service - Tests Unitaires")
+class VideoServiceTest {
+
+    @Mock
+    private GeneratedVideoRepository videoRepository;
+
+    @Mock
+    private VideoOrchestrationService orchestrationService;
+
+    @Mock
+    private TokenService tokenService;
+
+    @Mock
+    private VideoConfigurationService configService;
+
+    @InjectMocks
+    private VideoService videoService;
+
+    private UUID testUserId;
+    private VideoGenerationRequestDto testRequest;
+
+    @BeforeEach
+    void setUp() {
+        testUserId = UUID.randomUUID();
+        
+        testRequest = VideoGenerationRequestDto.builder()
+            .prompt("Une vidéo de test")
+            .durationSeconds(60)
+            .quality(GeneratedVideo.VideoQuality.STANDARD)
+            .build();
+    }
+
+    @Test
+    @DisplayName("Création vidéo avec solde suffisant - Succès")
+    void createVideoGeneration_WithSufficientTokens_Success() {
+        // Arrange
+        when(configService.getBaseCostPerSecond()).thenReturn(5);
+        when(tokenService.hasEnoughTokens(testUserId, 300)).thenReturn(true);
+        
+        GeneratedVideo savedVideo = GeneratedVideo.builder()
+            .id(UUID.randomUUID())
+            .userId(testUserId)
+            .status(GeneratedVideo.VideoStatus.QUEUED)
+            .build();
+        
+        when(videoRepository.save(any(GeneratedVideo.class))).thenReturn(savedVideo);
+        when(videoRepository.findQueuePosition(any(UUID.class))).thenReturn(5L);
+
+        // Act
+        VideoGenerationResponseDto response = 
+            videoService.createVideoGeneration(testRequest, testUserId);
+
+        // Assert
+        assertThat(response).isNotNull();
+        assertThat(response.getVideoId()).isEqualTo(savedVideo.getId());
+        assertThat(response.getStatus()).isEqualTo(GeneratedVideo.VideoStatus.QUEUED);
+        assertThat(response.getTokensCost()).isEqualTo(300);
+        
+        verify(tokenService).reserveTokens(
+            eq(testUserId), 
+            eq(300), 
+            anyString()
+        );
+        verify(orchestrationService).queueVideoGeneration(
+            any(GeneratedVideo.class), 
+            eq(testRequest)
+        );
+    }
+
+    @Test
+    @DisplayName("Création vidéo avec solde insuffisant - Exception")
+    void createVideoGeneration_WithInsufficientTokens_ThrowsException() {
+        // Arrange
+        when(configService.getBaseCostPerSecond()).thenReturn(5);
+        when(tokenService.hasEnoughTokens(testUserId, 300)).thenReturn(false);
+
+        // Act & Assert
+        assertThatThrownBy(() -> 
+            videoService.createVideoGeneration(testRequest, testUserId)
+        )
+            .isInstanceOf(InsufficientTokensException.class)
+            .hasMessageContaining("Solde insuffisant");
+        
+        verify(videoRepository, never()).save(any());
+        verify(orchestrationService, never()).queueVideoGeneration(any(), any());
+    }
+
+    @Test
+    @DisplayName("Calcul du coût - Qualité STANDARD")
+    void calculateCost_StandardQuality() {
+        // Arrange
+        when(configService.getBaseCostPerSecond()).thenReturn(5);
+        testRequest.setQuality(GeneratedVideo.VideoQuality.STANDARD);
+        testRequest.setDurationSeconds(120);
+
+        // Act
+        when(tokenService.hasEnoughTokens(any(), anyInt())).thenReturn(true);
+        when(videoRepository.save(any())).thenReturn(
+            GeneratedVideo.builder().id(UUID.randomUUID()).build()
+        );
+        
+        VideoGenerationResponseDto response = 
+            videoService.createVideoGeneration(testRequest, testUserId);
+
+        // Assert
+        assertThat(response.getTokensCost()).isEqualTo(600); // 120 * 5 * 1
+    }
+
+    @Test
+    @DisplayName("Calcul du coût - Qualité ULTRA")
+    void calculateCost_UltraQuality() {
+        // Arrange
+        when(configService.getBaseCostPerSecond()).thenReturn(5);
+        testRequest.setQuality(GeneratedVideo.VideoQuality.ULTRA);
+        testRequest.setDurationSeconds(60);
+
+        // Act
+        when(tokenService.hasEnoughTokens(any(), anyInt())).thenReturn(true);
+        when(videoRepository.save(any())).thenReturn(
+            GeneratedVideo.builder().id(UUID.randomUUID()).build()
+        );
+        
+        VideoGenerationResponseDto response = 
+            videoService.createVideoGeneration(testRequest, testUserId);
+
+        // Assert
+        assertThat(response.getTokensCost()).isEqualTo(1500); // 60 * 5 * 5
+    }
+}
+
+---
+# Tests d'intégration
+# Fichier: VideoIntegrationTest.java
+
+package com.nexusai.video.integration;
+
+import com.nexusai.video.domain.entity.GeneratedVideo;
+import com.nexusai.video.dto.VideoGenerationRequestDto;
+import com.nexusai.video.repository.GeneratedVideoRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+/**
+ * Tests d'intégration avec base de données réelle (TestContainers).
+ * 
+ * @author NexusAI Team
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@Testcontainers
+@DisplayName("Video API - Tests d'Intégration")
+class VideoIntegrationTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+        .withDatabaseName("testdb")
+        .withUsername("test")
+        .withPassword("test");
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+    }
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private GeneratedVideoRepository videoRepository;
+
+    @BeforeEach
+    void setUp() {
+        videoRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/videos/generate - Création réussie")
+    void generateVideo_Success() throws Exception {
+        String requestJson = """
+            {
+                "prompt": "Une vidéo de test",
+                "durationSeconds": 60,
+                "quality": "STANDARD"
+            }
+            """;
+
+        mockMvc.perform(post("/api/v1/videos/generate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestJson)
+                .header("Authorization", "Bearer test-token"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.videoId").exists())
+            .andExpect(jsonPath("$.status").value("QUEUED"))
+            .andExpect(jsonPath("$.tokensCost").exists());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/videos/{id} - Récupération réussie")
+    void getVideo_Success() throws Exception {
+        // Créer une vidéo de test
+        GeneratedVideo video = GeneratedVideo.builder()
+            .userId(UUID.randomUUID())
+            .prompt("Test prompt")
+            .durationSeconds(60)
+            .quality(GeneratedVideo.VideoQuality.STANDARD)
+            .status(GeneratedVideo.VideoStatus.QUEUED)
+            .tokensCost(300)
+            .build();
+        
+        video = videoRepository.save(video);
+
+        mockMvc.perform(get("/api/v1/videos/" + video.getId())
+                .header("Authorization", "Bearer test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(video.getId().toString()))
+            .andExpect(jsonPath("$.prompt").value("Test prompt"))
+            .andExpect(jsonPath("$.status").value("QUEUED"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/videos/user - Liste paginée")
+    void listUserVideos_Paginated() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        // Créer plusieurs vidéos
+        for (int i = 0; i < 5; i++) {
+            GeneratedVideo video = GeneratedVideo.builder()
+                .userId(userId)
+                .prompt("Test prompt " + i)
+                .durationSeconds(60)
+                .quality(GeneratedVideo.VideoQuality.STANDARD)
+                .status(GeneratedVideo.VideoStatus.QUEUED)
+                .tokensCost(300)
+                .build();
+            
+            videoRepository.save(video);
+        }
+
+        mockMvc.perform(get("/api/v1/videos/user")
+                .param("page", "0")
+                .param("size", "3")
+                .header("Authorization", "Bearer test-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.videos").isArray())
+            .andExpect(jsonPath("$.videos.length()").value(3))
+            .andExpect(jsonPath("$.totalElements").value(5))
+            .andExpect(jsonPath("$.totalPages").value(2));
+    }
+}

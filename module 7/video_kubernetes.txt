@@ -1,0 +1,607 @@
+# ============================================================================
+# KUBERNETES MANIFESTS - VIDEO GENERATION MODULE
+# ============================================================================
+# Déploiement production du module de génération vidéo sur Kubernetes
+# 
+# Architecture:
+# - Service Java (3 replicas)
+# - Workers Python (3-20 replicas avec HPA)
+# - Services externes (Kafka, Redis, PostgreSQL)
+# 
+# Namespace: nexusai-production
+# ============================================================================
+
+---
+# NAMESPACE
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nexusai-production
+  labels:
+    name: nexusai-production
+    environment: production
+
+---
+# CONFIGMAP - Configuration application
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: video-service-config
+  namespace: nexusai-production
+data:
+  # Configuration Spring Boot
+  SPRING_PROFILES_ACTIVE: "production"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka-service:9092"
+  SPRING_DATA_REDIS_HOST: "redis-service"
+  SPRING_DATA_REDIS_PORT: "6379"
+  
+  # Configuration vidéo
+  VIDEO_COST_BASE_PER_SECOND: "5"
+  VIDEO_QUEUE_MAX_SIZE: "100"
+  VIDEO_GENERATION_TIMEOUT_MINUTES: "60"
+  
+  # AWS
+  AWS_REGION: "eu-west-1"
+  S3_BUCKET_VIDEOS: "nexusai-videos-prod"
+  S3_BUCKET_ASSETS: "nexusai-video-assets-prod"
+  
+  # Services externes
+  PAYMENT_SERVICE_URL: "http://payment-service:8080"
+  COMPANION_SERVICE_URL: "http://companion-service:8080"
+
+---
+# SECRET - Credentials sensibles
+apiVersion: v1
+kind: Secret
+metadata:
+  name: video-service-secrets
+  namespace: nexusai-production
+type: Opaque
+stringData:
+  # Base de données
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-service:5432/nexusai"
+  SPRING_DATASOURCE_USERNAME: "nexusai"
+  SPRING_DATASOURCE_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+  
+  # AWS
+  AWS_ACCESS_KEY_ID: "CHANGE_ME"
+  AWS_SECRET_ACCESS_KEY: "CHANGE_ME"
+  
+  # APIs externes
+  OPENAI_API_KEY: "sk-CHANGE_ME"
+  ELEVENLABS_API_KEY: "CHANGE_ME"
+
+---
+# DEPLOYMENT - Service Java
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-service
+  namespace: nexusai-production
+  labels:
+    app: video-service
+    component: backend
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: video-service
+  template:
+    metadata:
+      labels:
+        app: video-service
+        component: backend
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      # Sécurité
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      # Anti-affinity pour distribuer sur différents nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - video-service
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+      - name: video-service
+        image: nexusai/video-service:1.0.0
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        
+        # Variables d'environnement depuis ConfigMap
+        envFrom:
+        - configMapRef:
+            name: video-service-config
+        - secretRef:
+            name: video-service-secrets
+        
+        # Ressources
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Startup probe (pour démarrage lent)
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+        
+        # Volume mounts
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      
+      volumes:
+      - name: logs
+        emptyDir: {}
+
+---
+# SERVICE - Exposition du service Java
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-service
+  namespace: nexusai-production
+  labels:
+    app: video-service
+spec:
+  type: ClusterIP
+  selector:
+    app: video-service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# HPA - Auto-scaling du service Java
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: video-service-hpa
+  namespace: nexusai-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: video-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+
+---
+# DEPLOYMENT - Workers Python
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-worker
+  namespace: nexusai-production
+  labels:
+    app: video-worker
+    component: worker
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: video-worker
+  template:
+    metadata:
+      labels:
+        app: video-worker
+        component: worker
+        version: v1.0.0
+    spec:
+      # Tolérations pour nodes GPU (si disponibles)
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      
+      # Node selector pour GPU (optionnel)
+      nodeSelector:
+        workload: video-generation
+      
+      containers:
+      - name: video-worker
+        image: nexusai/video-worker:1.0.0
+        imagePullPolicy: IfNotPresent
+        
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-service:9092"
+        - name: KAFKA_TOPIC_REQUESTS
+          value: "video.generation.requests"
+        - name: KAFKA_TOPIC_EVENTS
+          value: "video.generation.events"
+        - name: AWS_REGION
+          value: "eu-west-1"
+        - name: S3_BUCKET_VIDEOS
+          value: "nexusai-videos-prod"
+        - name: S3_BUCKET_ASSETS
+          value: "nexusai-video-assets-prod"
+        - name: TEMP_DIR
+          value: "/tmp/video-generation"
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        # Secrets
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: video-service-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: video-service-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: video-service-secrets
+              key: OPENAI_API_KEY
+        - name: ELEVENLABS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: video-service-secrets
+              key: ELEVENLABS_API_KEY
+        
+        # Ressources (augmentées pour traitement vidéo)
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+            # ephemeral-storage: "20Gi"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+            # ephemeral-storage: "50Gi"
+            # nvidia.com/gpu: 1  # Si GPU disponible
+        
+        # Volume pour fichiers temporaires
+        volumeMounts:
+        - name: temp-storage
+          mountPath: /tmp/video-generation
+      
+      volumes:
+      - name: temp-storage
+        emptyDir:
+          sizeLimit: 50Gi
+
+---
+# HPA - Auto-scaling des workers
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: video-worker-hpa
+  namespace: nexusai-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: video-worker
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Custom metric basé sur la taille de la queue Kafka
+  - type: Pods
+    pods:
+      metric:
+        name: kafka_consumer_lag
+      target:
+        type: AverageValue
+        averageValue: "10"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 120  # 2 minutes
+      policies:
+      - type: Pods
+        value: 3
+        periodSeconds: 60
+
+---
+# PDB - Pod Disruption Budget pour haute disponibilité
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: video-service-pdb
+  namespace: nexusai-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: video-service
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: video-worker-pdb
+  namespace: nexusai-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: video-worker
+
+---
+# INGRESS - Exposition externe
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: video-service-ingress
+  namespace: nexusai-production
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+spec:
+  tls:
+  - hosts:
+    - api.nexusai.com
+    secretName: nexusai-tls-secret
+  rules:
+  - host: api.nexusai.com
+    http:
+      paths:
+      - path: /api/v1/videos
+        pathType: Prefix
+        backend:
+          service:
+            name: video-service
+            port:
+              number: 8080
+
+---
+# SERVICE MONITOR - Pour Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: video-service-monitor
+  namespace: nexusai-production
+  labels:
+    app: video-service
+spec:
+  selector:
+    matchLabels:
+      app: video-service
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# NETWORK POLICY - Sécurité réseau
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: video-service-netpol
+  namespace: nexusai-production
+spec:
+  podSelector:
+    matchLabels:
+      app: video-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Autoriser vers PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Autoriser vers Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Autoriser vers Kafka
+  - to:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+  # Autoriser vers services externes (AWS, OpenAI)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# CRONJOB - Nettoyage des vidéos échouées
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: video-cleanup-job
+  namespace: nexusai-production
+spec:
+  schedule: "0 2 * * *"  # Tous les jours à 2h du matin
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: nexusai/video-service:1.0.0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              psql $SPRING_DATASOURCE_URL -c "SELECT cleanup_failed_videos(30);"
+            envFrom:
+            - secretRef:
+                name: video-service-secrets
+
+---
+# PERSISTENT VOLUME CLAIM - Logs persistants (optionnel)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: video-logs-pvc
+  namespace: nexusai-production
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard-rwo
+
+---
+# KEDA SCALEDOBJECT - Auto-scaling basé sur Kafka lag
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: video-worker-kafka-scaler
+  namespace: nexusai-production
+spec:
+  scaleTargetRef:
+    name: video-worker
+  minReplicaCount: 3
+  maxReplicaCount: 20
+  pollingInterval: 30
+  cooldownPeriod: 300
+  triggers:
+  - type: kafka
+    metadata:
+      bootstrapServers: kafka-service:9092
+      consumerGroup: video-generation-workers
+      topic: video.generation.requests
+      lagThreshold: "10"
+      activationLagThreshold: "5"

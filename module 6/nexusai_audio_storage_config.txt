@@ -1,0 +1,803 @@
+# ===========================================
+# MODULE 6.6 : STORAGE SERVICE (S3/MinIO)
+# ===========================================
+
+# AudioStorageService.java
+# package com.nexusai.audio.storage.service;
+
+"""
+/**
+ * Service de stockage des fichiers audio sur S3/MinIO.
+ * 
+ * <p>Ce service gère l'upload et le téléchargement de fichiers audio
+ * vers un stockage objet compatible S3 (AWS S3 ou MinIO).</p>
+ * 
+ * <p><strong>Configuration requise :</strong></p>
+ * <pre>{@code
+ * minio:
+ *   url: http://localhost:9000
+ *   access-key: nexusai
+ *   secret-key: nexusai123
+ *   bucket-name: nexusai-audio
+ * }</pre>
+ * 
+ * @author NexusAI Team
+ * @version 1.0.0
+ * @since 2025-10-20
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AudioStorageService {
+    
+    private final MinioClient minioClient;
+    
+    @Value("${minio.bucket-name}")
+    private String bucketName;
+    
+    /**
+     * Upload un fichier audio vers MinIO.
+     * 
+     * @param file Fichier à uploader
+     * @param folder Dossier de destination (ex: "voice-messages")
+     * @return URL publique du fichier
+     * @throws RuntimeException Si l'upload échoue
+     */
+    public String uploadAudio(MultipartFile file, String folder) {
+        log.info("Upload audio vers MinIO : file={}, folder={}", 
+                file.getOriginalFilename(), folder);
+        
+        try {
+            // Vérifier si le bucket existe
+            ensureBucketExists();
+            
+            // Générer un nom unique
+            String fileName = generateUniqueFileName(file.getOriginalFilename());
+            String objectName = folder + "/" + fileName;
+            
+            // Upload
+            InputStream inputStream = file.getInputStream();
+            minioClient.putObject(
+                PutObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectName)
+                    .stream(inputStream, file.getSize(), -1)
+                    .contentType(file.getContentType())
+                    .build()
+            );
+            
+            // Générer l'URL publique
+            String publicUrl = String.format("%s/%s/%s", 
+                    minioUrl, bucketName, objectName);
+            
+            log.info("Upload réussi : {}", publicUrl);
+            return publicUrl;
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'upload audio", e);
+            throw new RuntimeException("Échec de l'upload audio", e);
+        }
+    }
+    
+    /**
+     * Upload des données audio brutes.
+     * 
+     * @param audioData Données audio
+     * @param folder Dossier de destination
+     * @param format Format du fichier (mp3, wav, etc.)
+     * @return URL publique du fichier
+     */
+    public String uploadAudio(byte[] audioData, String folder, String format) {
+        log.info("Upload audio bytes : size={} bytes, format={}", 
+                audioData.length, format);
+        
+        try {
+            ensureBucketExists();
+            
+            String fileName = UUID.randomUUID().toString() + "." + format;
+            String objectName = folder + "/" + fileName;
+            
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(audioData);
+            
+            minioClient.putObject(
+                PutObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectName)
+                    .stream(inputStream, audioData.length, -1)
+                    .contentType("audio/" + format)
+                    .build()
+            );
+            
+            String publicUrl = String.format("%s/%s/%s", 
+                    minioUrl, bucketName, objectName);
+            
+            log.info("Upload bytes réussi : {}", publicUrl);
+            return publicUrl;
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'upload audio bytes", e);
+            throw new RuntimeException("Échec de l'upload audio", e);
+        }
+    }
+    
+    /**
+     * Supprime un fichier audio de MinIO.
+     * 
+     * @param audioUrl URL du fichier à supprimer
+     */
+    public void deleteAudio(String audioUrl) {
+        log.info("Suppression audio : url={}", audioUrl);
+        
+        try {
+            // Extraire l'object name de l'URL
+            String objectName = extractObjectName(audioUrl);
+            
+            minioClient.removeObject(
+                RemoveObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectName)
+                    .build()
+            );
+            
+            log.info("Suppression réussie");
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la suppression audio", e);
+            throw new RuntimeException("Échec de la suppression audio", e);
+        }
+    }
+    
+    /**
+     * Télécharge un fichier audio depuis MinIO.
+     * 
+     * @param audioUrl URL du fichier
+     * @return Données audio
+     */
+    public byte[] downloadAudio(String audioUrl) {
+        log.debug("Téléchargement audio : url={}", audioUrl);
+        
+        try {
+            String objectName = extractObjectName(audioUrl);
+            
+            InputStream stream = minioClient.getObject(
+                GetObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectName)
+                    .build()
+            );
+            
+            return stream.readAllBytes();
+            
+        } catch (Exception e) {
+            log.error("Erreur lors du téléchargement audio", e);
+            throw new RuntimeException("Échec du téléchargement audio", e);
+        }
+    }
+    
+    private void ensureBucketExists() throws Exception {
+        boolean exists = minioClient.bucketExists(
+            BucketExistsArgs.builder()
+                .bucket(bucketName)
+                .build()
+        );
+        
+        if (!exists) {
+            log.info("Création du bucket : {}", bucketName);
+            minioClient.makeBucket(
+                MakeBucketArgs.builder()
+                    .bucket(bucketName)
+                    .build()
+            );
+        }
+    }
+    
+    private String generateUniqueFileName(String originalFilename) {
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+        return UUID.randomUUID().toString() + extension;
+    }
+    
+    private String extractObjectName(String audioUrl) {
+        // Extrait "folder/filename.mp3" de "http://localhost:9000/bucket/folder/filename.mp3"
+        int bucketIndex = audioUrl.indexOf(bucketName);
+        return audioUrl.substring(bucketIndex + bucketName.length() + 1);
+    }
+}
+"""
+
+# ===========================================
+# MODULE 6.7 : EMOTION ANALYSIS SERVICE
+# ===========================================
+
+# EmotionResult.java
+"""
+package com.nexusai.audio.emotion.model;
+
+/**
+ * Résultat de l'analyse émotionnelle d'un audio.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class EmotionResult {
+    
+    /**
+     * Émotion détectée (NEUTRAL, HAPPY, SAD, ANGRY, ANXIOUS, EXCITED).
+     */
+    private String emotion;
+    
+    /**
+     * Score de confiance (0.0 à 1.0).
+     */
+    private Float confidence;
+    
+    /**
+     * Scores détaillés pour chaque émotion.
+     */
+    private Map<String, Float> emotionScores;
+}
+"""
+
+# EmotionAnalysisService.java
+"""
+package com.nexusai.audio.emotion.service;
+
+/**
+ * Service d'analyse émotionnelle des fichiers audio.
+ * 
+ * <p>Ce service utilise un modèle ML pour détecter l'émotion
+ * dans la voix de l'utilisateur.</p>
+ * 
+ * <p><strong>Émotions détectées :</strong></p>
+ * <ul>
+ *   <li>NEUTRAL - Neutre</li>
+ *   <li>HAPPY - Joyeux</li>
+ *   <li>SAD - Triste</li>
+ *   <li>ANGRY - En colère</li>
+ *   <li>ANXIOUS - Anxieux</li>
+ *   <li>EXCITED - Excité</li>
+ * </ul>
+ * 
+ * @author NexusAI Team
+ * @version 1.0.0
+ */
+@Slf4j
+@Service
+public class EmotionAnalysisService {
+    
+    /**
+     * Analyse l'émotion dans un fichier audio.
+     * 
+     * @param audioFile Fichier audio
+     * @return Résultat de l'analyse
+     */
+    public EmotionResult analyzeEmotion(MultipartFile audioFile) {
+        log.info("Analyse émotionnelle d'un fichier audio");
+        
+        try {
+            byte[] audioData = audioFile.getBytes();
+            return analyze(audioData);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'analyse émotionnelle", e);
+            // Retourner neutre par défaut
+            return EmotionResult.builder()
+                    .emotion("NEUTRAL")
+                    .confidence(0.5f)
+                    .build();
+        }
+    }
+    
+    /**
+     * Analyse des données audio brutes.
+     * 
+     * @param audioData Données audio
+     * @return Résultat de l'analyse
+     */
+    public EmotionResult analyze(byte[] audioData) {
+        // TODO: Implémenter l'analyse réelle avec un modèle ML
+        // Pour l'instant, retourne une analyse simulée
+        
+        log.debug("Analyse émotionnelle de {} bytes", audioData.length);
+        
+        Map<String, Float> scores = new HashMap<>();
+        scores.put("NEUTRAL", 0.6f);
+        scores.put("HAPPY", 0.2f);
+        scores.put("SAD", 0.1f);
+        scores.put("ANGRY", 0.05f);
+        scores.put("ANXIOUS", 0.03f);
+        scores.put("EXCITED", 0.02f);
+        
+        return EmotionResult.builder()
+                .emotion("NEUTRAL")
+                .confidence(0.6f)
+                .emotionScores(scores)
+                .build();
+    }
+}
+"""
+
+# ===========================================
+# MODULE 6.5 : WEBRTC SERVICE (Simplifié)
+# ===========================================
+
+# WebRTCSessionService.java
+"""
+package com.nexusai.audio.webrtc.service;
+
+/**
+ * Service de gestion des sessions WebRTC pour appels vocaux.
+ * 
+ * <p>Ce service gère les sessions d'appels vocaux en temps réel
+ * via WebRTC et Janus Gateway.</p>
+ * 
+ * @author NexusAI Team
+ * @version 1.0.0
+ */
+@Slf4j
+@Service
+public class WebRTCSessionService {
+    
+    /**
+     * Crée une nouvelle session WebRTC.
+     * 
+     * @param userId ID de l'utilisateur
+     * @param companionId ID du compagnon
+     * @return ID de session WebRTC
+     */
+    public String createSession(UUID userId, String companionId) {
+        log.info("Création session WebRTC : userId={}, companionId={}", 
+                userId, companionId);
+        
+        // Générer un ID de session unique
+        String sessionId = "webrtc-" + UUID.randomUUID().toString();
+        
+        // TODO: Initialiser la session avec Janus Gateway
+        
+        log.info("Session WebRTC créée : sessionId={}", sessionId);
+        return sessionId;
+    }
+    
+    /**
+     * Termine une session WebRTC.
+     * 
+     * @param sessionId ID de la session
+     */
+    public void closeSession(String sessionId) {
+        log.info("Fermeture session WebRTC : sessionId={}", sessionId);
+        
+        // TODO: Fermer la session Janus
+    }
+}
+"""
+
+# ===========================================
+# CONFIGURATION APPLICATION.YML
+# ===========================================
+
+# application.yml
+---
+spring:
+  application:
+    name: nexus-audio-service
+  
+  # Configuration PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nexusai
+    username: nexusai
+    password: nexusai123
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  
+  # Configuration JPA
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  # Configuration Kafka
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: nexus-audio-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+  
+  # Configuration upload de fichiers
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+      enabled: true
+
+# Configuration serveur
+server:
+  port: 8083
+  compression:
+    enabled: true
+    mime-types: application/json,audio/mpeg
+
+# Configuration MinIO/S3
+minio:
+  url: http://localhost:9000
+  access-key: nexusai
+  secret-key: nexusai123
+  bucket-name: nexusai-audio
+
+# Configuration OpenAI
+openai:
+  api-key: ${OPENAI_API_KEY:sk-your-api-key}
+  whisper:
+    url: https://api.openai.com/v1/audio/transcriptions
+    model: whisper-1
+
+# Configuration ElevenLabs
+elevenlabs:
+  api-key: ${ELEVENLABS_API_KEY:your-api-key}
+  url: https://api.elevenlabs.io/v1
+
+# Configuration Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Configuration logging
+logging:
+  level:
+    root: INFO
+    com.nexusai.audio: DEBUG
+    org.springframework.web: INFO
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+
+# Configuration Swagger/OpenAPI
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+---
+# Profil Docker
+spring:
+  config:
+    activate:
+      on-profile: docker
+  
+  datasource:
+    url: jdbc:postgresql://postgres:5432/nexusai
+  
+  kafka:
+    bootstrap-servers: kafka:9092
+
+minio:
+  url: http://minio:9000
+
+# ===========================================
+# DOCKER COMPOSE POUR LE MODULE AUDIO
+# ===========================================
+
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexusai-audio-postgres
+    environment:
+      POSTGRES_DB: nexusai
+      POSTGRES_USER: nexusai
+      POSTGRES_PASSWORD: nexusai123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - nexusai-audio-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka + Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: nexusai-audio-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - nexusai-audio-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: nexusai-audio-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - nexusai-audio-network
+
+  # MinIO (Stockage S3)
+  minio:
+    image: minio/minio:latest
+    container_name: nexusai-audio-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: nexusai
+      MINIO_ROOT_PASSWORD: nexusai123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - nexusai-audio-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Service Audio (Spring Boot)
+  audio-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexusai-audio-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    networks:
+      - nexusai-audio-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  nexusai-audio-network:
+    driver: bridge
+
+# ===========================================
+# DOCKERFILE
+# ===========================================
+
+# Dockerfile
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+
+# Copier les POMs
+COPY pom.xml .
+COPY nexus-audio-api/pom.xml nexus-audio-api/
+COPY nexus-audio-core/pom.xml nexus-audio-core/
+COPY nexus-audio-stt/pom.xml nexus-audio-stt/
+COPY nexus-audio-tts/pom.xml nexus-audio-tts/
+COPY nexus-audio-webrtc/pom.xml nexus-audio-webrtc/
+COPY nexus-audio-storage/pom.xml nexus-audio-storage/
+COPY nexus-audio-emotion/pom.xml nexus-audio-emotion/
+COPY nexus-audio-persistence/pom.xml nexus-audio-persistence/
+
+# Télécharger les dépendances
+RUN mvn dependency:go-offline -B
+
+# Copier le code source
+COPY . .
+
+# Build
+RUN mvn clean package -DskipTests
+
+# Image runtime
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Copier le JAR
+COPY --from=build /app/nexus-audio-api/target/*.jar app.jar
+
+# Exposition du port
+EXPOSE 8083
+
+# Variables d'environnement
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
+
+# Point d'entrée
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# ===========================================
+# MAKEFILE POUR FACILITER LE DÉVELOPPEMENT
+# ===========================================
+
+# Makefile
+.PHONY: help build test run docker-up docker-down clean
+
+help: ## Affiche l'aide
+	@echo "Commandes disponibles:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+build: ## Compile le projet
+	mvn clean install -DskipTests
+
+test: ## Exécute les tests
+	mvn test
+
+run: ## Lance l'application en local
+	mvn spring-boot:run -pl nexus-audio-api
+
+docker-build: ## Construit l'image Docker
+	docker-compose build
+
+docker-up: ## Démarre tous les services Docker
+	docker-compose up -d
+
+docker-down: ## Arrête tous les services Docker
+	docker-compose down
+
+docker-logs: ## Affiche les logs
+	docker-compose logs -f audio-service
+
+clean: ## Nettoie les fichiers de build
+	mvn clean
+	docker-compose down -v
+
+db-migrate: ## Exécute les migrations Flyway
+	mvn flyway:migrate
+
+# ===========================================
+# README.MD DU MODULE
+# ===========================================
+
+# README.md
+"""
+# Module 6 : Audio Processing - NexusAI
+
+Module de traitement audio pour la plateforme NexusAI, gérant les messages vocaux,
+appels en temps réel, transcription et synthèse vocale.
+
+## 📋 Fonctionnalités
+
+- ✅ Messages vocaux asynchrones
+- ✅ Appels vocaux temps réel (WebRTC)
+- ✅ Transcription Speech-to-Text (Whisper)
+- ✅ Synthèse Text-to-Speech (ElevenLabs)
+- ✅ Analyse émotionnelle
+- ✅ Profils vocaux personnalisés
+- ✅ Stockage S3/MinIO
+
+## 🏗️ Architecture
+
+Le module est divisé en 8 sous-modules Maven :
+
+1. **nexus-audio-api** - API REST et WebSocket
+2. **nexus-audio-core** - Logique métier
+3. **nexus-audio-stt** - Speech-to-Text (Whisper)
+4. **nexus-audio-tts** - Text-to-Speech (ElevenLabs)
+5. **nexus-audio-webrtc** - Gestion WebRTC
+6. **nexus-audio-storage** - Stockage S3/MinIO
+7. **nexus-audio-emotion** - Analyse émotionnelle
+8. **nexus-audio-persistence** - Persistance JPA
+
+## 🚀 Démarrage rapide
+
+### Prérequis
+
+- Java 21
+- Maven 3.9+
+- Docker & Docker Compose
+- Clés API : OpenAI, ElevenLabs
+
+### Installation
+
+1. Cloner le repository
+2. Configurer les variables d'environnement :
+
+```bash
+export OPENAI_API_KEY=sk-...
+export ELEVENLABS_API_KEY=...
+```
+
+3. Démarrer les services :
+
+```bash
+make docker-up
+```
+
+4. L'API est disponible sur http://localhost:8083
+
+### URLs importantes
+
+- API REST: http://localhost:8083/api/v1/audio
+- Swagger UI: http://localhost:8083/swagger-ui.html
+- Actuator: http://localhost:8083/actuator/health
+
+## 📚 Documentation API
+
+### Upload d'un message vocal
+
+```bash
+curl -X POST "http://localhost:8083/api/v1/audio/voice-messages" \
+  -H "Content-Type: multipart/form-data" \
+  -F "audioFile=@message.mp3" \
+  -F "conversationId=conv-123" \
+  -F "userId=550e8400-e29b-41d4-a716-446655440000" \
+  -F "senderType=USER"
+```
+
+### Initier un appel vocal
+
+```bash
+curl -X POST "http://localhost:8083/api/v1/audio/calls/initiate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "companionId": "companion-123",
+    "conversationId": "conv-123"
+  }'
+```
+
+## 🧪 Tests
+
+```bash
+make test
+```
+
+## 📦 Build
+
+```bash
+make build
+```
+
+## 👥 Équipe de développement
+
+Voir PLAN_DEVELOPPEMENT.md pour la répartition des tâches.
+
+## 📄 Licence
+
+Copyright © 2025 NexusAI Team
+"""

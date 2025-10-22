@@ -1,0 +1,764 @@
+# ============================================================================
+# GITHUB ACTIONS - CI/CD PIPELINE
+# ============================================================================
+
+# .github/workflows/conversation-module-ci.yml
+
+name: Conversation Module CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'conversation-module/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'conversation-module/**'
+
+env:
+  JAVA_VERSION: '21'
+  MAVEN_OPTS: '-Xmx2048m'
+  
+jobs:
+  # ==========================================================================
+  # JOB 1: BUILD & TEST
+  # ==========================================================================
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: test
+          MONGO_INITDB_ROOT_PASSWORD: test
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      
+      - name: Compile project
+        run: |
+          cd conversation-module
+          mvn clean compile -DskipTests
+      
+      - name: Run unit tests
+        run: |
+          cd conversation-module
+          mvn test
+      
+      - name: Run integration tests
+        env:
+          MONGODB_URI: mongodb://test:test@localhost:27017/nexusai_test?authSource=admin
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+        run: |
+          cd conversation-module
+          mvn verify -Pintegration-tests
+      
+      - name: Generate coverage report
+        run: |
+          cd conversation-module
+          mvn jacoco:report
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./conversation-module/target/site/jacoco/jacoco.xml
+          flags: unittests
+          name: conversation-module-coverage
+      
+      - name: Check code coverage
+        run: |
+          cd conversation-module
+          mvn jacoco:check -Djacoco.coverage.minimum=0.80
+      
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: conversation-module/**/target/surefire-reports/
+  
+  # ==========================================================================
+  # JOB 2: CODE QUALITY
+  # ==========================================================================
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for SonarCloud
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+      
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      
+      - name: SonarCloud Scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          cd conversation-module
+          mvn sonar:sonar \
+            -Dsonar.projectKey=nexusai_conversation-module \
+            -Dsonar.organization=nexusai \
+            -Dsonar.host.url=https://sonarcloud.io
+      
+      - name: CheckStyle
+        run: |
+          cd conversation-module
+          mvn checkstyle:check
+      
+      - name: SpotBugs
+        run: |
+          cd conversation-module
+          mvn spotbugs:check
+  
+  # ==========================================================================
+  # JOB 3: SECURITY SCAN
+  # ==========================================================================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+      
+      - name: OWASP Dependency Check
+        run: |
+          cd conversation-module
+          mvn dependency-check:check
+      
+      - name: Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './conversation-module'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+  
+  # ==========================================================================
+  # JOB 4: BUILD DOCKER IMAGE
+  # ==========================================================================
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [build-and-test, code-quality, security-scan]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+      
+      - name: Build with Maven
+        run: |
+          cd conversation-module
+          mvn clean package -DskipTests
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: nexusai/conversation-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./conversation-module
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Run Trivy on Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nexusai/conversation-service:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+  
+  # ==========================================================================
+  # JOB 5: DEPLOY TO STAGING
+  # ==========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-docker
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging-api.nexusai.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster nexusai-staging \
+            --service conversation-service \
+            --force-new-deployment
+      
+      - name: Wait for deployment
+        run: |
+          aws ecs wait services-stable \
+            --cluster nexusai-staging \
+            --services conversation-service
+      
+      - name: Run smoke tests
+        run: |
+          ./scripts/smoke-tests.sh https://staging-api.nexusai.com
+  
+  # ==========================================================================
+  # JOB 6: DEPLOY TO PRODUCTION
+  # ==========================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-docker
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.nexusai.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      
+      - name: Blue-Green Deployment
+        run: |
+          # Deploy to green environment
+          ./scripts/blue-green-deploy.sh green
+          
+          # Run health checks
+          ./scripts/health-check.sh green
+          
+          # Switch traffic
+          ./scripts/switch-traffic.sh green
+          
+          # Monitor for 5 minutes
+          sleep 300
+          
+          # Rollback if errors
+          if ./scripts/check-errors.sh; then
+            echo "Deployment successful"
+          else
+            ./scripts/switch-traffic.sh blue
+            exit 1
+          fi
+      
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Conversation Module deployed to Production'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+---
+# ============================================================================
+# GITLAB CI/CD (Alternative)
+# ============================================================================
+
+# .gitlab-ci.yml
+
+stages:
+  - build
+  - test
+  - quality
+  - security
+  - package
+  - deploy
+
+variables:
+  MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+cache:
+  paths:
+    - .m2/repository/
+    - target/
+
+# Build
+build:
+  stage: build
+  image: maven:3.9-eclipse-temurin-21
+  script:
+    - cd conversation-module
+    - mvn $MAVEN_CLI_OPTS clean compile
+  artifacts:
+    paths:
+      - conversation-module/target/
+    expire_in: 1 hour
+
+# Unit Tests
+test:unit:
+  stage: test
+  image: maven:3.9-eclipse-temurin-21
+  script:
+    - cd conversation-module
+    - mvn $MAVEN_CLI_OPTS test
+  coverage: '/Total.*?([0-9]{1,3})%/'
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - conversation-module/target/surefire-reports/TEST-*.xml
+
+# Integration Tests
+test:integration:
+  stage: test
+  image: maven:3.9-eclipse-temurin-21
+  services:
+    - mongo:7.0
+    - redis:7-alpine
+  variables:
+    MONGODB_URI: "mongodb://mongo:27017/test"
+    REDIS_HOST: "redis"
+  script:
+    - cd conversation-module
+    - mvn $MAVEN_CLI_OPTS verify -Pintegration-tests
+
+# Code Quality
+quality:sonar:
+  stage: quality
+  image: maven:3.9-eclipse-temurin-21
+  script:
+    - cd conversation-module
+    - mvn $MAVEN_CLI_OPTS sonar:sonar
+  only:
+    - main
+    - develop
+
+# Security Scan
+security:owasp:
+  stage: security
+  image: maven:3.9-eclipse-temurin-21
+  script:
+    - cd conversation-module
+    - mvn $MAVEN_CLI_OPTS dependency-check:check
+  artifacts:
+    when: always
+    paths:
+      - conversation-module/target/dependency-check-report.html
+
+# Docker Build
+package:docker:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA ./conversation-module
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  only:
+    - main
+    - develop
+
+# Deploy Staging
+deploy:staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - curl -X POST $STAGING_DEPLOY_WEBHOOK
+  environment:
+    name: staging
+    url: https://staging-api.nexusai.com
+  only:
+    - develop
+
+# Deploy Production
+deploy:production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - curl -X POST $PRODUCTION_DEPLOY_WEBHOOK
+  environment:
+    name: production
+    url: https://api.nexusai.com
+  when: manual
+  only:
+    - main
+
+---
+# ============================================================================
+# SCRIPTS D'AUTOMATISATION
+# ============================================================================
+
+# scripts/smoke-tests.sh
+#!/bin/bash
+
+# Script de tests de fumée après déploiement
+
+set -e
+
+API_URL=${1:-http://localhost:8080}
+TOKEN=${2:-test-token}
+
+echo "🧪 Running smoke tests on $API_URL"
+
+# Test 1: Health check
+echo "Test 1: Health check..."
+response=$(curl -s -o /dev/null -w "%{http_code}" $API_URL/actuator/health)
+if [ $response -eq 200 ]; then
+  echo "✅ Health check passed"
+else
+  echo "❌ Health check failed (HTTP $response)"
+  exit 1
+fi
+
+# Test 2: Create conversation
+echo "Test 2: Create conversation..."
+conv_response=$(curl -s -X POST $API_URL/api/v1/conversations \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "test-user",
+    "companionId": "test-companion",
+    "title": "Smoke Test"
+  }')
+
+conv_id=$(echo $conv_response | jq -r '.id')
+
+if [ -n "$conv_id" ] && [ "$conv_id" != "null" ]; then
+  echo "✅ Conversation created: $conv_id"
+else
+  echo "❌ Failed to create conversation"
+  exit 1
+fi
+
+# Test 3: Send message
+echo "Test 3: Send message..."
+msg_response=$(curl -s -X POST $API_URL/api/v1/conversations/$conv_id/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Hello!",
+    "type": "TEXT"
+  }')
+
+msg_id=$(echo $msg_response | jq -r '.id')
+
+if [ -n "$msg_id" ] && [ "$msg_id" != "null" ]; then
+  echo "✅ Message sent: $msg_id"
+else
+  echo "❌ Failed to send message"
+  exit 1
+fi
+
+# Test 4: Delete conversation
+echo "Test 4: Delete conversation..."
+delete_response=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X DELETE $API_URL/api/v1/conversations/$conv_id \
+  -H "Authorization: Bearer $TOKEN")
+
+if [ $delete_response -eq 204 ]; then
+  echo "✅ Conversation deleted"
+else
+  echo "❌ Failed to delete conversation (HTTP $delete_response)"
+  exit 1
+fi
+
+echo ""
+echo "🎉 All smoke tests passed!"
+
+---
+# scripts/blue-green-deploy.sh
+#!/bin/bash
+
+# Script de déploiement Blue-Green
+
+set -e
+
+ENV=$1  # blue ou green
+CLUSTER="nexusai-production"
+SERVICE="conversation-service"
+
+echo "🚀 Deploying to $ENV environment"
+
+# Update task definition
+NEW_TASK_DEF=$(aws ecs register-task-definition \
+  --cli-input-json file://ecs-task-definition-$ENV.json \
+  --query 'taskDefinition.taskDefinitionArn' \
+  --output text)
+
+echo "✅ New task definition: $NEW_TASK_DEF"
+
+# Update service
+aws ecs update-service \
+  --cluster $CLUSTER \
+  --service $SERVICE-$ENV \
+  --task-definition $NEW_TASK_DEF \
+  --force-new-deployment
+
+echo "✅ Service updated"
+
+# Wait for deployment to stabilize
+echo "⏳ Waiting for deployment to stabilize..."
+aws ecs wait services-stable \
+  --cluster $CLUSTER \
+  --services $SERVICE-$ENV
+
+echo "✅ Deployment complete"
+
+---
+# scripts/rollback.sh
+#!/bin/bash
+
+# Script de rollback automatique
+
+set -e
+
+CLUSTER="nexusai-production"
+SERVICE="conversation-service"
+
+echo "⚠️  Initiating rollback..."
+
+# Get previous task definition
+PREVIOUS_TASK=$(aws ecs describe-services \
+  --cluster $CLUSTER \
+  --services $SERVICE \
+  --query 'services[0].deployments[1].taskDefinition' \
+  --output text)
+
+if [ -z "$PREVIOUS_TASK" ]; then
+  echo "❌ No previous task definition found"
+  exit 1
+fi
+
+echo "Rolling back to: $PREVIOUS_TASK"
+
+# Update service with previous task
+aws ecs update-service \
+  --cluster $CLUSTER \
+  --service $SERVICE \
+  --task-definition $PREVIOUS_TASK \
+  --force-new-deployment
+
+# Wait for rollback
+aws ecs wait services-stable \
+  --cluster $CLUSTER \
+  --services $SERVICE
+
+echo "✅ Rollback complete"
+
+---
+# scripts/performance-test.sh
+#!/bin/bash
+
+# Script de tests de performance avec Apache Bench
+
+set -e
+
+API_URL=${1:-http://localhost:8080}
+CONCURRENT=${2:-50}
+REQUESTS=${3:-1000}
+
+echo "⚡ Running performance tests"
+echo "URL: $API_URL"
+echo "Concurrent: $CONCURRENT"
+echo "Total Requests: $REQUESTS"
+
+# Test endpoint
+ab -n $REQUESTS -c $CONCURRENT \
+  -H "Authorization: Bearer test-token" \
+  -p payload.json \
+  -T "application/json" \
+  $API_URL/api/v1/conversations/$CONV_ID/messages
+
+echo "✅ Performance test complete"
+
+---
+# scripts/database-migration.sh
+#!/bin/bash
+
+# Script de migration de base de données
+
+set -e
+
+MONGO_URI=${1:-mongodb://localhost:27017/nexusai_conversations}
+
+echo "🗄️  Running database migrations on $MONGO_URI"
+
+# Migration 1: Add indexes
+mongosh $MONGO_URI --eval '
+  db.conversations.createIndex({ userId: 1, lastMessageAt: -1 });
+  db.conversations.createIndex({ companionId: 1 });
+  db.conversations.createIndex({ tags: 1 });
+  db.conversations.createIndex({ isEphemeral: 1, expiresAt: 1 });
+  print("✅ Indexes created");
+'
+
+# Migration 2: Data transformation (example)
+mongosh $MONGO_URI --eval '
+  db.conversations.updateMany(
+    { context: { $exists: false } },
+    { $set: { 
+      context: {
+        topics: [],
+        emotionalTone: "NEUTRAL",
+        messageCount: 0
+      }
+    }}
+  );
+  print("✅ Data migration complete");
+'
+
+echo "✅ All migrations complete"
+
+---
+# Makefile
+
+.PHONY: help build test run deploy clean
+
+help:
+	@echo "Available commands:"
+	@echo "  make build    - Build the project"
+	@echo "  make test     - Run tests"
+	@echo "  make run      - Run locally"
+	@echo "  make deploy   - Deploy to staging"
+	@echo "  make clean    - Clean build artifacts"
+
+build:
+	@echo "Building conversation module..."
+	cd conversation-module && mvn clean package -DskipTests
+
+test:
+	@echo "Running tests..."
+	cd conversation-module && mvn test
+
+test-integration:
+	@echo "Running integration tests..."
+	docker-compose up -d mongodb redis kafka
+	cd conversation-module && mvn verify -Pintegration-tests
+	docker-compose down
+
+run:
+	@echo "Starting application..."
+	docker-compose up -d
+	cd conversation-module && mvn spring-boot:run -pl conversation-api
+
+deploy-staging:
+	@echo "Deploying to staging..."
+	./scripts/deploy-staging.sh
+
+deploy-production:
+	@echo "Deploying to production..."
+	./scripts/deploy-production.sh
+
+clean:
+	@echo "Cleaning..."
+	cd conversation-module && mvn clean
+	docker-compose down -v
+
+smoke-test:
+	@echo "Running smoke tests..."
+	./scripts/smoke-tests.sh http://localhost:8080
+
+performance-test:
+	@echo "Running performance tests..."
+	./scripts/performance-test.sh http://localhost:8080 50 1000
