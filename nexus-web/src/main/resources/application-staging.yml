@@ -1,0 +1,56 @@
+# ══════════════════════════════════════════════════════════════
+# NexusAI - Staging Environment Configuration
+# ══════════════════════════════════════════════════════════════
+
+spring:
+  # ─────────────────────────────────────────────────────────────
+  # Database - Staging
+  # ─────────────────────────────────────────────────────────────
+  datasource:
+    hikari:
+      maximum-pool-size: 15
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+# ══════════════════════════════════════════════════════════════
+# Server - Staging
+# ══════════════════════════════════════════════════════════════
+server:
+  port: 8081
+  error:
+    include-stacktrace: never
+
+# ══════════════════════════════════════════════════════════════
+# Logging - Staging
+# ══════════════════════════════════════════════════════════════
+logging:
+  level:
+    root: INFO
+    com.nexusai: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+
+# ══════════════════════════════════════════════════════════════
+# OpenAPI - Limited for staging
+# ══════════════════════════════════════════════════════════════
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+# ══════════════════════════════════════════════════════════════
+# NexusAI Staging Configuration
+# ══════════════════════════════════════════════════════════════
+nexusai:
+  security:
+    cors:
+      allowed-origins: ${CORS_ORIGINS}
+  rate-limiting:
+    enabled: true
+    requests-per-minute: 60
+    requests-per-hour: 1000
