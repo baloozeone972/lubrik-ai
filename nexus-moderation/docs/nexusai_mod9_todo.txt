@@ -1,0 +1,480 @@
+# Module 9 - Moderation System : Ce qui reste à faire
+
+## ✅ Ce qui est FAIT (70% du module)
+
+### Core Infrastructure
+- ✅ Architecture complète documentée
+- ✅ Structure Maven du projet
+- ✅ Configuration Spring Boot (application.yml)
+- ✅ Configuration Docker & Kubernetes
+- ✅ Migrations Flyway (tables + règles par défaut)
+
+### Services Core
+- ✅ **TextModerationService** (100%)
+  - Modération texte avec OpenAI
+  - Gestion multi-niveaux (STRICT/LIGHT/OPTIONAL)
+  - Détection contenu illégal (CSAM, terrorisme)
+  - Création d'incidents
+- ✅ **DistressDetectionService** (100%)
+  - Détection patterns suicidaires
+  - Intervention automatique
+  - Envoi ressources d'aide
+- ✅ **BlacklistService** (100%)
+  - Chargement blacklist
+  - Vérification termes interdits
+  - Support regex
+- ✅ **ModerationRulesService** (100%)
+  - Récupération règles par niveau
+  - Cache Redis
+
+### Clients & Repositories
+- ✅ **OpenAIModerationClient** (100%)
+- ✅ **UserServiceClient** (Feign) (100%)
+- ✅ **ModerationIncidentRepository** (100%)
+- ✅ **ModerationRuleRepository** (100%)
+
+### Controllers
+- ✅ **ModerationController** (80%)
+  - POST /api/v1/moderation/text ✅
+  - POST /api/v1/moderation/image ⏳ (endpoint créé, implémentation manquante)
+  - POST /api/v1/moderation/video ⏳ (endpoint créé, implémentation manquante)
+
+### Tests
+- ✅ **TextModerationServiceTest** (8 tests, coverage 85%)
+- ✅ **DistressDetectionServiceTest** (4 tests, coverage 90%)
+- ✅ **ModerationIncidentRepositoryTest** (3 tests)
+- ✅ **ModerationIntegrationTest** (1 test E2E avec Testcontainers)
+
+### Documentation
+- ✅ README complet
+- ✅ Quick Start Guide
+- ✅ Architecture détaillée
+- ✅ API documentation (Swagger)
+
+---
+
+## 🔴 Ce qui reste à faire (30% du module)
+
+### 1. Services Media Moderation (Développeur 2) - 2 semaines
+
+#### ImageModerationService
+```java
+❌ Méthode moderateImage()
+❌ Intégration AWS Rekognition
+❌ Intégration PhotoDNA (CSAM detection)
+❌ Analyse labels/modération
+❌ Détection nudité explicite
+❌ Gestion erreurs API
+❌ Tests unitaires (coverage 80%+)
+```
+
+#### VideoModerationService
+```java
+❌ Méthode moderateVideo()
+❌ Extraction de frames (FFmpeg)
+❌ Analyse frame par frame
+❌ Analyse piste audio
+❌ Score global de modération
+❌ Gestion vidéos longues (async)
+❌ Tests unitaires (coverage 80%+)
+```
+
+#### RekognitionClient
+```java
+❌ Configuration AWS SDK
+❌ Méthode detectModerationLabels()
+❌ Méthode detectExplicitContent()
+❌ Gestion throttling AWS
+❌ Fallback en cas d'erreur
+```
+
+#### PhotoDNAClient
+```java
+❌ Configuration Microsoft PhotoDNA
+❌ Méthode checkCSAM()
+❌ Gestion réponse API
+❌ Logging sécurisé (pas de contenu dans logs)
+```
+
+**Fichiers à créer :**
+```
+src/main/java/com/nexusai/moderation/service/moderation/
+├── ImageModerationService.java
+├── VideoModerationService.java
+
+src/main/java/com/nexusai/moderation/service/client/
+├── RekognitionClient.java
+├── PhotoDNAClient.java
+
+src/test/java/com/nexusai/moderation/service/moderation/
+├── ImageModerationServiceTest.java
+└── VideoModerationServiceTest.java
+```
+
+---
+
+### 2. Detection Services (Développeur 3) - 1 semaine
+
+#### EmotionAnalysisService
+```java
+❌ Méthode analyzeEmotion(String text)
+❌ Détection émotions (joie, tristesse, colère, peur)
+❌ Score intensité émotionnelle
+❌ Tracking état émotionnel sur conversation
+❌ Tests unitaires
+```
+
+#### ContentClassificationService
+```java
+❌ Méthode classifyContent(String content)
+❌ Classification catégories (news, opinion, fiction, etc.)
+❌ Détection spam/phishing
+❌ Détection manipulation/deepfake mentions
+❌ Tests unitaires
+```
+
+**Fichiers à créer :**
+```
+src/main/java/com/nexusai/moderation/service/detection/
+├── EmotionAnalysisService.java
+└── ContentClassificationService.java
+
+src/test/java/com/nexusai/moderation/service/detection/
+├── EmotionAnalysisServiceTest.java
+└── ContentClassificationServiceTest.java
+```
+
+---
+
+### 3. Incident Management (Développeur 4) - 2 semaines
+
+#### IncidentManagementService
+```java
+❌ Méthode createIncident()
+❌ Méthode updateIncidentStatus()
+❌ Méthode escalateIncident() (CRITICAL → Modérateurs)
+❌ Méthode getIncidentsByUser()
+❌ Méthode getIncidentStatistics()
+❌ Workflow review (PENDING → IN_REVIEW → RESOLVED)
+❌ Tests unitaires
+```
+
+#### WarningService
+```java
+❌ Méthode issueWarning(userId, incidentId, type)
+❌ Méthode getUserWarnings(userId)
+❌ Méthode acknowledgeWarning(warningId)
+❌ Système de points (3 warnings = ban temporaire)
+❌ Expiration warnings (30 jours)
+❌ Tests unitaires
+```
+
+#### EscalationService
+```java
+❌ Méthode shouldEscalate(incident)
+❌ Méthode escalateToModerators(incidentId)
+❌ Méthode escalateToLegal(incidentId) (CSAM/terrorisme)
+❌ Notification modérateurs
+❌ SLA tracking (temps de réponse)
+❌ Tests unitaires
+```
+
+#### IncidentController
+```java
+❌ GET /api/v1/moderation/incidents
+❌ GET /api/v1/moderation/incidents/{id}
+❌ PUT /api/v1/moderation/incidents/{id}/review
+❌ POST /api/v1/moderation/incidents/{id}/escalate
+❌ GET /api/v1/moderation/incidents/stats
+```
+
+**Fichiers à créer :**
+```
+src/main/java/com/nexusai/moderation/service/incident/
+├── IncidentManagementService.java
+├── WarningService.java
+└── EscalationService.java
+
+src/main/java/com/nexusai/moderation/controller/
+└── IncidentController.java
+
+src/main/java/com/nexusai/moderation/repository/
+├── UserWarningRepository.java (existe, à compléter)
+└── UserBanRepository.java (à créer)
+
+src/test/java/com/nexusai/moderation/service/incident/
+├── IncidentManagementServiceTest.java
+├── WarningServiceTest.java
+└── EscalationServiceTest.java
+```
+
+---
+
+### 4. Consent & Compliance (Développeur 5) - 1.5 semaines
+
+#### ConsentManagementService
+```java
+❌ Méthode createConsent(userId, consentType, ipAddress)
+❌ Méthode revokeConsent(consentId)
+❌ Méthode hasActiveConsent(userId, type)
+❌ Méthode getActiveConsents(userId)
+❌ Vérification expiration (90 jours)
+❌ Tests unitaires
+```
+
+#### DigitalSignatureService
+```java
+❌ Méthode generateSignature(consentData, privateKey)
+❌ Méthode verifySignature(signature, publicKey)
+❌ Méthode hashConsentData(consent)
+❌ Support RSA-2048
+❌ Tests unitaires
+```
+
+#### ConsentController
+```java
+❌ POST /api/v1/moderation/consents (créer consentement)
+❌ GET /api/v1/moderation/consents/active
+❌ DELETE /api/v1/moderation/consents/{id} (révoquer)
+❌ GET /api/v1/moderation/consents/{id}/verify
+```
+
+#### KYC Integration
+```java
+❌ Intégration avec User Service pour vérification KYC
+❌ Vérification niveau KYC 3 requis pour VIP+
+❌ Cache statut KYC (Redis, TTL 1h)
+```
+
+**Fichiers à créer :**
+```
+src/main/java/com/nexusai/moderation/service/consent/
+├── ConsentManagementService.java
+├── DigitalSignatureService.java
+└── KYCVerificationService.java
+
+src/main/java/com/nexusai/moderation/controller/
+└── ConsentController.java
+
+src/main/java/com/nexusai/moderation/repository/
+└── AdultContentConsentRepository.java (existe, à compléter)
+
+src/test/java/com/nexusai/moderation/service/consent/
+├── ConsentManagementServiceTest.java
+└── DigitalSignatureServiceTest.java
+```
+
+---
+
+### 5. Notifications (Transversal) - 3 jours
+
+#### NotificationService (implémentation complète)
+```java
+❌ Implémentation sendSystemMessage() avec WebSocket
+❌ Implémentation alertSupportTeam() avec Slack/Email
+❌ Méthode sendEmail(userId, template, data)
+❌ Méthode sendPushNotification(userId, message)
+❌ Templates emails (détresse, avertissement, ban)
+❌ Tests unitaires
+```
+
+**Fichiers à créer :**
+```
+src/main/java/com/nexusai/moderation/service/notification/
+├── NotificationServiceImpl.java
+├── EmailService.java
+├── WebSocketNotificationService.java
+└── SlackNotificationService.java
+
+src/main/resources/templates/email/
+├── distress-resources.html
+├── warning-issued.html
+└── account-banned.html
+```
+
+---
+
+### 6. Event System (Kafka) - 2 jours
+
+#### ModerationEventPublisher (compléter)
+```java
+❌ publishIncidentCreated(incident)
+❌ publishUserBanned(userId, reason)
+❌ publishUserWarned(userId, warning)
+✅ publishDistressDetected(event) (déjà fait)
+```
+
+#### ModerationEventListener
+```java
+❌ onUserDeleted(event) → Supprimer incidents utilisateur
+❌ onSubscriptionChanged(event) → Mettre à jour niveau modération
+```
+
+**Fichiers à créer/compléter :**
+```
+src/main/java/com/nexusai/moderation/event/
+├── ModerationEventPublisher.java (compléter)
+└── ModerationEventListener.java (créer)
+
+src/main/java/com/nexusai/moderation/event/events/
+├── IncidentCreatedEvent.java
+├── UserBannedEvent.java
+└── UserWarnedEvent.java
+```
+
+---
+
+### 7. Configuration & Infrastructure - 2 jours
+
+#### SecurityConfig
+```java
+❌ Configuration JWT complète
+❌ Gestion rôles (USER, MODERATOR, ADMIN)
+❌ Endpoints publics/protégés
+❌ CORS configuration
+```
+
+#### CacheConfig
+```java
+❌ Configuration Redis
+❌ Caches : moderation-rules, user-levels, kyc-status
+❌ TTL par cache
+```
+
+#### Swagger/OpenAPI
+```java
+❌ Configuration OpenAPI 3
+❌ Documentation complète des APIs
+❌ Exemples de requêtes/réponses
+```
+
+**Fichiers à créer :**
+```
+src/main/java/com/nexusai/moderation/config/
+├── SecurityConfig.java
+├── CacheConfig.java
+├── OpenApiConfig.java
+└── RestTemplateConfig.java
+```
+
+---
+
+### 8. Fichiers de ressources manquants
+
+#### Blacklist
+```
+❌ src/main/resources/blacklists/terms.txt
+❌ src/main/resources/blacklists/patterns.txt
+```
+
+#### Templates email
+```
+❌ src/main/resources/templates/email/distress-resources.html
+❌ src/main/resources/templates/email/warning-issued.html
+❌ src/main/resources/templates/email/account-banned.html
+```
+
+#### Fichiers test
+```
+❌ src/test/resources/application-test.yml
+❌ src/test/resources/test-data.sql
+```
+
+---
+
+### 9. Documentation manquante
+
+```
+❌ docs/api-reference.md (documentation détaillée APIs)
+❌ docs/moderation-rules.md (explication règles)
+❌ docs/deployment-guide.md (guide déploiement détaillé)
+❌ docs/troubleshooting.md (résolution problèmes)
+❌ CONTRIBUTING.md (guide contribution)
+❌ CHANGELOG.md (historique versions)
+```
+
+---
+
+### 10. Monitoring & Observability - 1 semaine
+
+#### Métriques Prometheus
+```java
+❌ Counter: moderation_requests_total
+❌ Counter: moderation_blocked_total
+❌ Histogram: moderation_response_time
+❌ Gauge: moderation_queue_size
+❌ Counter: incidents_by_type
+```
+
+#### Dashboard Grafana
+```
+❌ monitoring/grafana-dashboard.json
+❌ Panels: Requêtes, Blocages, Temps réponse, Incidents
+```
+
+#### Alertes Prometheus
+```
+❌ monitoring/prometheus-alerts.yml
+❌ Alertes: HighErrorRate, CriticalIncidentsPending, etc.
+```
+
+---
+
+## 📊 Récapitulatif
+
+| Catégorie | État | Temps restant |
+|-----------|------|---------------|
+| Infrastructure & Config | 70% ✅ | 2 jours |
+| Text Moderation | 100% ✅ | - |
+| Media Moderation | 0% ❌ | 2 semaines |
+| Detection Services | 50% ⚠️ | 1 semaine |
+| Incident Management | 10% ❌ | 2 semaines |
+| Consent & Compliance | 20% ⚠️ | 1.5 semaines |
+| Notifications | 20% ⚠️ | 3 jours |
+| Events Kafka | 30% ⚠️ | 2 jours |
+| Tests | 40% ⚠️ | 1 semaine |
+| Documentation | 60% ⚠️ | 3 jours |
+| Monitoring | 0% ❌ | 1 semaine |
+
+**TOTAL RESTANT : ~5-6 semaines** avec 6 développeurs
+
+---
+
+## 🎯 Priorités
+
+### P0 (Critique - MVP)
+1. ✅ Text Moderation (FAIT)
+2. ❌ Incident Management (EN COURS)
+3. ❌ Notifications de base
+4. ❌ Tests d'intégration
+
+### P1 (Important - Release 1.0)
+1. ❌ Image Moderation
+2. ❌ Consent Management
+3. ❌ Warning System
+4. ❌ Monitoring basique
+
+### P2 (Nice to have - Release 1.1)
+1. ❌ Video Moderation
+2. ❌ Emotion Analysis
+3. ❌ Dashboard Grafana complet
+4. ❌ Documentation avancée
+
+---
+
+## 🚀 Plan d'action immédiat (Sprint 1 - 2 semaines)
+
+### Semaine 1
+- [ ] Dev 4 : IncidentManagementService + WarningService
+- [ ] Dev 5 : ConsentManagementService
+- [ ] Dev 6 : SecurityConfig + NotificationService
+- [ ] Tous : Tests unitaires
+
+### Semaine 2
+- [ ] Dev 2 : ImageModerationService
+- [ ] Dev 3 : EmotionAnalysisService
+- [ ] Dev 4 : EscalationService + IncidentController
+- [ ] Dev 5 : DigitalSignatureService + ConsentController
+- [ ] Dev 6 : Kafka Events + Tests intégration
+
+**Objectif** : MVP fonctionnel en 2 semaines ! 🎯
