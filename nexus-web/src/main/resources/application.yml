@@ -1,0 +1,270 @@
+# ══════════════════════════════════════════════════════════════
+# NexusAI - Main Application Configuration
+# ══════════════════════════════════════════════════════════════
+
+spring:
+  application:
+    name: nexusai
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # ─────────────────────────────────────────────────────────────
+  # Database Configuration
+  # ─────────────────────────────────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nexusai_auth}
+    username: ${DB_USER:nexusai}
+    password: ${DB_PASSWORD:nexusai_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      pool-name: NexusAI-HikariPool
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+    show-sql: false
+
+  # ─────────────────────────────────────────────────────────────
+  # Flyway Database Migration
+  # ─────────────────────────────────────────────────────────────
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
+  # ─────────────────────────────────────────────────────────────
+  # Redis Configuration
+  # ─────────────────────────────────────────────────────────────
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:nexusai_redis_password}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 1000ms
+
+  # ─────────────────────────────────────────────────────────────
+  # Kafka Configuration
+  # ─────────────────────────────────────────────────────────────
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: nexusai-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.nexusai.*
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # ─────────────────────────────────────────────────────────────
+  # Mail Configuration
+  # ─────────────────────────────────────────────────────────────
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS:false}
+
+  # ─────────────────────────────────────────────────────────────
+  # Cache Configuration
+  # ─────────────────────────────────────────────────────────────
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=10000,expireAfterWrite=60m
+
+  # ─────────────────────────────────────────────────────────────
+  # Multipart File Upload
+  # ─────────────────────────────────────────────────────────────
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+# ══════════════════════════════════════════════════════════════
+# Server Configuration
+# ══════════════════════════════════════════════════════════════
+server:
+  port: ${SERVER_PORT:8081}
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,application/javascript,application/json
+    min-response-size: 1024
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ══════════════════════════════════════════════════════════════
+# Management & Actuator
+# ══════════════════════════════════════════════════════════════
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# ══════════════════════════════════════════════════════════════
+# Logging Configuration
+# ══════════════════════════════════════════════════════════════
+logging:
+  level:
+    root: INFO
+    com.nexusai: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
+# ══════════════════════════════════════════════════════════════
+# OpenAPI / Swagger Configuration
+# ══════════════════════════════════════════════════════════════
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: false
+
+# ══════════════════════════════════════════════════════════════
+# NexusAI Custom Configuration
+# ══════════════════════════════════════════════════════════════
+nexusai:
+  # ─────────────────────────────────────────────────────────────
+  # Security & JWT
+  # ─────────────────────────────────────────────────────────────
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET:your_super_secret_jwt_key_at_least_256_bits_long_change_in_production}
+      access-token-expiration: 86400000  # 24 hours
+      refresh-token-expiration: 604800000  # 7 days
+    cors:
+      allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:8080}
+      allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+
+  # ─────────────────────────────────────────────────────────────
+  # AI Engine Configuration
+  # ─────────────────────────────────────────────────────────────
+  ai:
+    provider: ${AI_PROVIDER:ollama}  # ollama, openai, anthropic
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${OLLAMA_MODEL:llama3}
+      timeout: 120000
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      model: ${OPENAI_MODEL:gpt-4}
+      base-url: https://api.openai.com/v1
+    cache:
+      enabled: true
+      ttl: 3600000  # 1 hour
+
+  # ─────────────────────────────────────────────────────────────
+  # Storage Configuration (MinIO)
+  # ─────────────────────────────────────────────────────────────
+  storage:
+    minio:
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${MINIO_SECRET_KEY:minioadmin}
+      bucket: ${MINIO_BUCKET:nexusai}
+      region: ${MINIO_REGION:us-east-1}
+    max-file-size: 52428800  # 50MB
+    allowed-extensions:
+      images: jpg,jpeg,png,gif,webp
+      audio: mp3,wav,ogg,m4a,flac
+      video: mp4,webm,mov,avi
+
+  # ─────────────────────────────────────────────────────────────
+  # Subscription & Payment (Stripe)
+  # ─────────────────────────────────────────────────────────────
+  payment:
+    stripe:
+      secret-key: ${STRIPE_SECRET_KEY:}
+      publishable-key: ${STRIPE_PUBLISHABLE_KEY:}
+      webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    plans:
+      free:
+        tokens-per-month: 100
+        max-companions: 1
+        features: basic
+      standard:
+        tokens-per-month: 1000
+        max-companions: 3
+        features: standard
+      premium:
+        tokens-per-month: 5000
+        max-companions: 10
+        features: premium
+      vip:
+        tokens-per-month: 20000
+        max-companions: 50
+        features: vip
+      vip-plus:
+        tokens-per-month: -1  # unlimited
+        max-companions: -1    # unlimited
+        features: all
+
+  # ─────────────────────────────────────────────────────────────
+  # Rate Limiting
+  # ─────────────────────────────────────────────────────────────
+  rate-limiting:
+    enabled: true
+    requests-per-minute: 60
+    requests-per-hour: 1000
+
+  # ─────────────────────────────────────────────────────────────
+  # Application URL
+  # ─────────────────────────────────────────────────────────────
+  app:
+    url: ${APP_URL:http://localhost:3000}
+    api-url: ${API_URL:http://localhost:8081}

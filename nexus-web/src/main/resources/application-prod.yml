@@ -1,0 +1,92 @@
+# ══════════════════════════════════════════════════════════════
+# NexusAI - Production Environment Configuration
+# ══════════════════════════════════════════════════════════════
+
+spring:
+  # ─────────────────────────────────────────────────────────────
+  # Database - Production
+  # ─────────────────────────────────────────────────────────────
+  datasource:
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+  # ─────────────────────────────────────────────────────────────
+  # Mail - Production SMTP
+  # ─────────────────────────────────────────────────────────────
+  mail:
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# ══════════════════════════════════════════════════════════════
+# Server - Production
+# ══════════════════════════════════════════════════════════════
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+  compression:
+    enabled: true
+    min-response-size: 512
+
+# ══════════════════════════════════════════════════════════════
+# Management - Production Security
+# ══════════════════════════════════════════════════════════════
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+# ══════════════════════════════════════════════════════════════
+# Logging - Production (JSON format for ELK)
+# ══════════════════════════════════════════════════════════════
+logging:
+  level:
+    root: WARN
+    com.nexusai: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
+  pattern:
+    console: '{"timestamp":"%d{ISO8601}","level":"%level","logger":"%logger","message":"%msg"}%n'
+
+# ══════════════════════════════════════════════════════════════
+# OpenAPI - Disabled in production
+# ══════════════════════════════════════════════════════════════
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# ══════════════════════════════════════════════════════════════
+# NexusAI Production Configuration
+# ══════════════════════════════════════════════════════════════
+nexusai:
+  security:
+    cors:
+      allowed-origins: ${CORS_ORIGINS}
+      allow-credentials: true
+  ai:
+    cache:
+      enabled: true
+      ttl: 7200000  # 2 hours
+  rate-limiting:
+    enabled: true
+    requests-per-minute: 30
+    requests-per-hour: 500
