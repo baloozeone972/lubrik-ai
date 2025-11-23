@@ -44,6 +44,10 @@
             <groupId>com.nexusai</groupId>
             <artifactId>nexus-analytics</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.nexusai</groupId>
+            <artifactId>nexus-payment</artifactId>
+        </dependency>
 
         <!-- Spring Web -->
         <dependency>
