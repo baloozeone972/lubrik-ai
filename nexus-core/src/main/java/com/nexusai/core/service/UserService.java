@@ -6,6 +6,7 @@ import com.nexusai.core.dto.UpdateProfileRequest;
 import com.nexusai.core.dto.UserPreferencesDTO;
 import com.nexusai.core.dto.UserProfileDTO;
 import com.nexusai.core.entity.User;
+import com.nexusai.core.enums.AccountStatus;
 import com.nexusai.core.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,7 +58,7 @@ public class UserService {
         }
 
         if (request.getAvatarUrl() != null) {
-            user.setAvatarUrl(request.getAvatarUrl());
+            user.setProfileImageUrl(request.getAvatarUrl());
         }
 
         user = userRepository.save(user);
@@ -73,7 +74,7 @@ public class UserService {
 
         // Would fetch from user_preferences table
         return UserPreferencesDTO.builder()
-                .language("en")
+                .language(user.getLocale())
                 .theme("system")
                 .notificationsEnabled(true)
                 .emailNotifications(true)
@@ -90,7 +91,11 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId.toString()));
 
-        // Would save to user_preferences table
+        if (preferences.getLanguage() != null) {
+            user.setLocale(preferences.getLanguage());
+        }
+
+        userRepository.save(user);
         log.info("Preferences updated for user {}", userId);
 
         return preferences;
@@ -123,7 +128,7 @@ public class UserService {
             throw new BusinessException("INVALID_PASSWORD", "Password is incorrect");
         }
 
-        user.setStatus(com.nexusai.core.enums.UserStatus.DELETED);
+        user.setAccountStatus(AccountStatus.DELETED);
         user.setDeletedAt(LocalDateTime.now());
         userRepository.save(user);
         log.info("Account deactivated for user {}", userId);
@@ -136,7 +141,8 @@ public class UserService {
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("userId", userId);
-        stats.put("tier", user.getTier().name());
+        stats.put("tier", user.getSubscriptionType().name());
+        stats.put("tokensRemaining", user.getTokensRemaining());
         stats.put("companionsCount", 0); // Would fetch from DB
         stats.put("conversationsCount", 0);
         stats.put("messagesThisMonth", 0);
@@ -152,16 +158,16 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId.toString()));
 
         Map<String, Object> subscription = new HashMap<>();
-        subscription.put("tier", user.getTier().name());
-        subscription.put("status", "active");
+        subscription.put("tier", user.getSubscriptionType().name());
+        subscription.put("status", user.getAccountStatus().name());
         subscription.put("currentPeriodEnd", null);
         subscription.put("cancelAtPeriodEnd", false);
 
         // Would fetch from subscriptions table
         Map<String, Object> limits = new HashMap<>();
-        limits.put("companions", getLimitForTier(user.getTier().name(), "companions"));
-        limits.put("messagesPerDay", getLimitForTier(user.getTier().name(), "messages_per_day"));
-        limits.put("tokensPerMonth", getLimitForTier(user.getTier().name(), "tokens_per_month"));
+        limits.put("companions", getLimitForTier(user.getSubscriptionType().name(), "companions"));
+        limits.put("messagesPerDay", getLimitForTier(user.getSubscriptionType().name(), "messages_per_day"));
+        limits.put("tokensPerMonth", getLimitForTier(user.getSubscriptionType().name(), "tokens_per_month"));
 
         subscription.put("limits", limits);
         return subscription;
@@ -175,22 +181,22 @@ public class UserService {
                 case "tokens_per_month" -> 10000;
                 default -> 0;
             };
-            case "STARTER" -> switch (limitType) {
-                case "companions" -> 3;
+            case "VIP" -> switch (limitType) {
+                case "companions" -> 5;
                 case "messages_per_day" -> 1000;
                 case "tokens_per_month" -> 100000;
                 default -> 0;
             };
-            case "PRO" -> switch (limitType) {
-                case "companions" -> 10;
-                case "messages_per_day" -> -1;
-                case "tokens_per_month" -> 500000;
-                default -> 0;
-            };
-            default -> switch (limitType) {
+            case "VIP_PLUS" -> switch (limitType) {
                 case "companions" -> -1;
                 case "messages_per_day" -> -1;
                 case "tokens_per_month" -> -1;
+                default -> 0;
+            };
+            default -> switch (limitType) {
+                case "companions" -> 1;
+                case "messages_per_day" -> 100;
+                case "tokens_per_month" -> 10000;
                 default -> 0;
             };
         };
@@ -202,9 +208,9 @@ public class UserService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
-                .avatarUrl(user.getAvatarUrl())
+                .avatarUrl(user.getProfileImageUrl())
                 .bio(user.getBio())
-                .tier(user.getTier().name())
+                .tier(user.getSubscriptionType().name())
                 .emailVerified(user.getEmailVerified())
                 .createdAt(user.getCreatedAt())
                 .lastLoginAt(user.getLastLoginAt())
