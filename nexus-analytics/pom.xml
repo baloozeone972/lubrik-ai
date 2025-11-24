@@ -45,6 +45,12 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Redis for caching -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- ClickHouse for analytics storage (optional) -->
         <dependency>
             <groupId>com.clickhouse</groupId>
