@@ -18,6 +18,10 @@
         <!-- Internal -->
         <dependency>
             <groupId>com.nexusai</groupId>
+            <artifactId>nexus-commons</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.nexusai</groupId>
             <artifactId>nexus-core</artifactId>
         </dependency>
 
