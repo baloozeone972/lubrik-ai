@@ -28,4 +28,16 @@ public interface AIProviderService {
      * Checks if the provider is available.
      */
     boolean isAvailable();
+
+    /**
+     * Estimates the number of tokens in the given text.
+     * Default implementation uses a simple word-based estimate.
+     */
+    default int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        // Rough estimate: ~4 characters per token on average
+        return (int) Math.ceil(text.length() / 4.0);
+    }
 }
