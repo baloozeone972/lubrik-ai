@@ -23,8 +23,8 @@ COPY nexus-ai-engine/pom.xml nexus-ai-engine/
 COPY nexus-media/pom.xml nexus-media/
 COPY nexus-moderation/pom.xml nexus-moderation/
 COPY nexus-analytics/pom.xml nexus-analytics/
+COPY nexus-payment/pom.xml nexus-payment/
 COPY nexus-api/pom.xml nexus-api/
-COPY nexus-web/pom.xml nexus-web/
 
 # Download dependencies (cached layer)
 RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
@@ -39,14 +39,14 @@ COPY nexus-ai-engine/src nexus-ai-engine/src
 COPY nexus-media/src nexus-media/src
 COPY nexus-moderation/src nexus-moderation/src
 COPY nexus-analytics/src nexus-analytics/src
+COPY nexus-payment/src nexus-payment/src
 COPY nexus-api/src nexus-api/src
-COPY nexus-web/src nexus-web/src
 
 # Build the application
 RUN ./mvnw clean package -DskipTests -B
 
 # Extract layers for optimized startup
-RUN java -Djarmode=layertools -jar nexus-web/target/*.jar extract --destination extracted
+RUN java -Djarmode=layertools -jar nexus-api/target/*.jar extract --destination extracted
 
 # ────────────────────────────────────────────────────────────────
 # Stage 2: Runtime
