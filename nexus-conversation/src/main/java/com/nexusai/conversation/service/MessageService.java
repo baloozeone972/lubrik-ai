@@ -155,8 +155,9 @@ public class MessageService {
                 .orElseThrow(() -> new ResourceNotFoundException("Message", messageId.toString()));
 
         // Verify ownership via conversation
-        conversationRepository.findByIdAndUserId(message.getConversationId(), userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Conversation", message.getConversationId().toString()));
+        final UUID msgConversationId = message.getConversationId();
+        conversationRepository.findByIdAndUserId(msgConversationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation", msgConversationId.toString()));
 
         if (message.getRole() != MessageRole.USER) {
             throw new BusinessException("EDIT_NOT_ALLOWED", "Only user messages can be edited");
@@ -168,10 +169,10 @@ public class MessageService {
 
         message.setContent(newContent);
         message.setIsEdited(true);
-        message = messageRepository.save(message);
+        Message savedMessage = messageRepository.save(message);
 
         log.info("Message {} edited by user", messageId);
-        return mapToDTO(message);
+        return mapToDTO(savedMessage);
     }
 
     @Transactional
