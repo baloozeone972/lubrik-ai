@@ -8,19 +8,19 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MinioConfig {
 
-    @Value("${minio.url:http://localhost:9000}")
-    private String url;
+    @Value("${nexusai.storage.minio.endpoint:http://localhost:9000}")
+    private String endpoint;
 
-    @Value("${minio.access-key:minioadmin}")
+    @Value("${nexusai.storage.minio.access-key:minioadmin}")
     private String accessKey;
 
-    @Value("${minio.secret-key:minioadmin}")
+    @Value("${nexusai.storage.minio.secret-key:minioadmin}")
     private String secretKey;
 
     @Bean
     public MinioClient minioClient() {
         return MinioClient.builder()
-                .endpoint(url)
+                .endpoint(endpoint)
                 .credentials(accessKey, secretKey)
                 .build();
     }

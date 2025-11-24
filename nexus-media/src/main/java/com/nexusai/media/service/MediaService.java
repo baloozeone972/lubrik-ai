@@ -25,10 +25,10 @@ public class MediaService {
 
     private final MinioClient minioClient;
 
-    @Value("${minio.bucket:nexusai-media}")
+    @Value("${nexusai.storage.minio.bucket:nexusai}")
     private String bucketName;
 
-    @Value("${minio.url:http://localhost:9000}")
+    @Value("${nexusai.storage.minio.endpoint:http://localhost:9000}")
     private String minioUrl;
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
