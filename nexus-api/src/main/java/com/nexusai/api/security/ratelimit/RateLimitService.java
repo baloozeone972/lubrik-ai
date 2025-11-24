@@ -1,31 +1,30 @@
 package com.nexusai.api.security.ratelimit;
 
+import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.ConsumptionProbe;
-import io.github.bucket4j.distributed.proxy.ProxyManager;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-@RequiredArgsConstructor
+@Service
 @Slf4j
 public class RateLimitService {
 
-    private final ProxyManager<String> proxyManager;
-    private final Map<String, BucketConfiguration> configCache = new ConcurrentHashMap<>();
+    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
-    private static final String KEY_PREFIX = "rate_limit:";
-
-    public RateLimitResult checkRateLimit(String key, BucketConfiguration config) {
-        String bucketKey = KEY_PREFIX + key;
-
-        Bucket bucket = proxyManager.builder()
-                .build(bucketKey, () -> config);
+    public RateLimitResult checkRateLimit(String key, Supplier<BucketConfiguration> configSupplier) {
+        Bucket bucket = buckets.computeIfAbsent(key, k ->
+                Bucket.builder()
+                        .addLimit(configSupplier.get().getBandwidths().get(0))
+                        .build()
+        );
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
@@ -60,14 +59,14 @@ public class RateLimitService {
     }
 
     public RateLimitResult checkEndpointRateLimit(String endpoint, String identifier, int requestsPerMinute) {
-        BucketConfiguration config = configCache.computeIfAbsent(
-                endpoint + ":" + requestsPerMinute,
-                k -> BucketConfiguration.builder()
-                        .addLimit(io.github.bucket4j.Bandwidth.simple(requestsPerMinute,
-                                java.time.Duration.ofMinutes(1)))
-                        .build()
-        );
-        return checkRateLimit(endpoint + ":" + identifier, config);
+        String key = endpoint + ":" + identifier;
+        Supplier<BucketConfiguration> configSupplier = () -> BucketConfiguration.builder()
+                .addLimit(Bandwidth.builder()
+                        .capacity(requestsPerMinute)
+                        .refillGreedy(requestsPerMinute, Duration.ofMinutes(1))
+                        .build())
+                .build();
+        return checkRateLimit(key, configSupplier);
     }
 
     public record RateLimitResult(boolean allowed, long remainingTokens, long retryAfterSeconds) {}
