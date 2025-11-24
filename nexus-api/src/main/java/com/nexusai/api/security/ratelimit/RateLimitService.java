@@ -22,7 +22,7 @@ public class RateLimitService {
     public RateLimitResult checkRateLimit(String key, Supplier<BucketConfiguration> configSupplier) {
         Bucket bucket = buckets.computeIfAbsent(key, k ->
                 Bucket.builder()
-                        .addLimit(configSupplier.get().getBandwidths().get(0))
+                        .addLimit(configSupplier.get().getBandwidths()[0])
                         .build()
         );
 
