@@ -60,6 +60,14 @@ public class Companion extends BaseEntity {
     @Column(name = "system_prompt", columnDefinition = "text")
     private String systemPrompt;
 
+    @Column(name = "model_provider", length = 50)
+    @Builder.Default
+    private String modelProvider = "ollama";
+
+    @Column(name = "model_name", length = 100)
+    @Builder.Default
+    private String modelName = "llama3";
+
     @Column(name = "total_messages")
     @Builder.Default
     private Long totalMessages = 0L;

@@ -64,8 +64,14 @@ public class User extends BaseEntity {
     @Builder.Default
     private Integer tokensRemaining = 100;
 
+    @Column(name = "display_name", length = 100)
+    private String displayName;
+
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl;
+
+    @Column(name = "bio", length = 500)
+    private String bio;
 
     @Column(name = "locale", length = 10)
     @Builder.Default

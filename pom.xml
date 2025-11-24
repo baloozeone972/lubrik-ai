@@ -29,6 +29,7 @@
         <module>nexus-media</module>
         <module>nexus-moderation</module>
         <module>nexus-analytics</module>
+        <module>nexus-payment</module>
         <module>nexus-api</module>
         <module>nexus-web</module>
     </modules>
@@ -120,6 +121,11 @@
             <dependency>
                 <groupId>com.nexusai</groupId>
                 <artifactId>nexus-analytics</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nexusai</groupId>
+                <artifactId>nexus-payment</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -24,6 +24,14 @@
             <groupId>com.nexusai</groupId>
             <artifactId>nexus-companion</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.nexusai</groupId>
+            <artifactId>nexus-ai-engine</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.nexusai</groupId>
+            <artifactId>nexus-moderation</artifactId>
+        </dependency>
 
         <!-- Spring Web -->
         <dependency>
@@ -53,6 +61,13 @@
         <dependency>
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

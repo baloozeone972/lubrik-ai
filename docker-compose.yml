@@ -96,6 +96,8 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
     networks:
       - nexusai-network
 
@@ -116,6 +118,8 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     networks:
       - nexusai-network
     healthcheck:
@@ -251,6 +255,63 @@ services:
     networks:
       - nexusai-network
 
+  # ────────────────────────────────────────────────────────────
+  # NexusAI Application (Production Build)
+  # ────────────────────────────────────────────────────────────
+  nexusai-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexusai-api
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nexusai_auth
+      SPRING_DATASOURCE_USERNAME: nexusai
+      SPRING_DATASOURCE_PASSWORD: nexusai_password
+      # Redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: nexusai_redis_password
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # MinIO
+      NEXUSAI_STORAGE_MINIO_ENDPOINT: http://minio:9000
+      NEXUSAI_STORAGE_MINIO_ACCESS_KEY: minioadmin
+      NEXUSAI_STORAGE_MINIO_SECRET_KEY: minioadmin
+      # Ollama
+      NEXUSAI_AI_OLLAMA_BASE_URL: http://ollama:11434
+      # Email (MailHog for dev)
+      SPRING_MAIL_HOST: mailhog
+      SPRING_MAIL_PORT: 1025
+      # JWT
+      NEXUSAI_SECURITY_JWT_SECRET: your-256-bit-secret-key-change-in-production-minimum-32-chars
+      NEXUSAI_SECURITY_JWT_EXPIRATION: 86400000
+      # Stripe (test keys)
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - nexusai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    profiles:
+      - app
+
 # ══════════════════════════════════════════════════════════════
 # VOLUMES
 # ══════════════════════════════════════════════════════════════
@@ -258,6 +319,10 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  kafka_data:
     driver: local
   minio_data:
     driver: local
