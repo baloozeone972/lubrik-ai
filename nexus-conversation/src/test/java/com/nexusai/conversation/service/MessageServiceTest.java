@@ -77,7 +77,7 @@ class MessageServiceTest {
         messageId = UUID.randomUUID();
 
         testCompanion = Companion.builder()
-                .id(companionId)
+                //.id(companionId)
                 .userId(userId)
                 .name("Test Companion")
                 .systemPrompt("You are a helpful assistant.")
@@ -86,7 +86,7 @@ class MessageServiceTest {
                 .build();
 
         testConversation = Conversation.builder()
-                .id(conversationId)
+                //.id(conversationId)
                 .userId(userId)
                 .companionId(companionId)
                 .title("Test Conversation")
@@ -97,7 +97,7 @@ class MessageServiceTest {
                 .build();
 
         testMessage = Message.builder()
-                .id(messageId)
+                //.id(messageId)
                 .conversationId(conversationId)
                 .role(MessageRole.USER)
                 .type(MessageType.TEXT)
@@ -330,7 +330,7 @@ class MessageServiceTest {
         @DisplayName("Should not allow editing assistant messages")
         void shouldNotAllowEditingAssistantMessages() {
             Message assistantMessage = Message.builder()
-                    .id(messageId)
+                    //.id(messageId)
                     .conversationId(conversationId)
                     .role(MessageRole.ASSISTANT)
                     .type(MessageType.TEXT)

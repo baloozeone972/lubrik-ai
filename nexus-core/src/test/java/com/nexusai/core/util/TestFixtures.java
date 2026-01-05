@@ -12,13 +12,13 @@ import java.util.UUID;
  */
 public final class TestFixtures {
 
-    private TestFixtures() {
+   /* private TestFixtures() {
         // Utility class
     }
 
-    /**
+    *//**
      * Creates a sample User with default values.
-     */
+     *//*
     public static User createUser() {
         return User.builder()
                 .id(UUID.randomUUID())
@@ -33,9 +33,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample User with specified email.
-     */
+     *//*
     public static User createUser(String email) {
         return User.builder()
                 .id(UUID.randomUUID())
@@ -50,9 +50,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample admin User.
-     */
+     *//*
     public static User createAdminUser() {
         return User.builder()
                 .id(UUID.randomUUID())
@@ -67,9 +67,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample Companion with default values.
-     */
+     *//*
     public static Companion createCompanion(UUID userId) {
         return Companion.builder()
                 .id(UUID.randomUUID())
@@ -87,9 +87,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample public Companion.
-     */
+     *//*
     public static Companion createPublicCompanion(UUID userId) {
         Companion companion = createCompanion(userId);
         companion.setIsPublic(true);
@@ -97,9 +97,9 @@ public final class TestFixtures {
         return companion;
     }
 
-    /**
+    *//**
      * Creates a sample Conversation.
-     */
+     *//*
     public static Conversation createConversation(UUID userId, UUID companionId) {
         return Conversation.builder()
                 .id(UUID.randomUUID())
@@ -113,18 +113,18 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample archived Conversation.
-     */
+     *//*
     public static Conversation createArchivedConversation(UUID userId, UUID companionId) {
         Conversation conversation = createConversation(userId, companionId);
         conversation.setStatus(ConversationStatus.ARCHIVED);
         return conversation;
     }
 
-    /**
+    *//**
      * Creates a sample user Message.
-     */
+     *//*
     public static Message createUserMessage(UUID conversationId) {
         return Message.builder()
                 .id(UUID.randomUUID())
@@ -136,18 +136,18 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample user Message with content.
-     */
+     *//*
     public static Message createUserMessage(UUID conversationId, String content) {
         Message message = createUserMessage(conversationId);
         message.setContent(content);
         return message;
     }
 
-    /**
+    *//**
      * Creates a sample assistant Message.
-     */
+     *//*
     public static Message createAssistantMessage(UUID conversationId) {
         return Message.builder()
                 .id(UUID.randomUUID())
@@ -160,9 +160,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample assistant Message with content.
-     */
+     *//*
     public static Message createAssistantMessage(UUID conversationId, String content, int tokensUsed) {
         return Message.builder()
                 .id(UUID.randomUUID())
@@ -175,9 +175,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a sample system Message.
-     */
+     *//*
     public static Message createSystemMessage(UUID conversationId, String content) {
         return Message.builder()
                 .id(UUID.randomUUID())
@@ -189,9 +189,9 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a VIP user with premium subscription.
-     */
+     *//*
     public static User createVipUser() {
         return User.builder()
                 .id(UUID.randomUUID())
@@ -206,12 +206,12 @@ public final class TestFixtures {
                 .build();
     }
 
-    /**
+    *//**
      * Creates a suspended user.
-     */
+     *//*
     public static User createSuspendedUser() {
         User user = createUser();
         user.setAccountStatus(AccountStatus.SUSPENDED);
         return user;
-    }
+    }*/
 }

@@ -60,14 +60,14 @@ class CompanionServiceTest {
         companionId = UUID.randomUUID();
 
         testUser = User.builder()
-                .id(userId)
+               // .id(userId)
                 .email("test@example.com")
                 .username("testuser")
                 .subscriptionType(SubscriptionType.STANDARD)
                 .build();
 
         testCompanion = Companion.builder()
-                .id(companionId)
+                //.id(companionId)
                 .userId(userId)
                 .name("Test Companion")
                 .description("A test companion")
@@ -152,7 +152,7 @@ class CompanionServiceTest {
         @DisplayName("Should allow unlimited companions for VIP_PLUS users")
         void shouldAllowUnlimitedCompanionsForVipPlus() {
             User vipUser = User.builder()
-                    .id(userId)
+                   // .id(userId)
                     .subscriptionType(SubscriptionType.VIP_PLUS)
                     .build();
 
@@ -261,7 +261,7 @@ class CompanionServiceTest {
         @DisplayName("Should return all user companions except deleted")
         void shouldReturnAllUserCompanionsExceptDeleted() {
             Companion companion2 = Companion.builder()
-                    .id(UUID.randomUUID())
+                    //.id(UUID.randomUUID())
                     .userId(userId)
                     .name("Companion 2")
                     .status(CompanionStatus.ACTIVE)
