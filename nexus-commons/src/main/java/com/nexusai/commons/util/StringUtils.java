@@ -1,6 +1,5 @@
 package com.nexusai.commons.util;
 
-import org.apache.commons.lang3.StringUtils as ApacheStringUtils;
 import java.text.Normalizer;
 import java.util.regex.Pattern;
 
@@ -66,14 +65,14 @@ public final class StringUtils {
      * Checks if a string is blank (null, empty, or whitespace only).
      */
     public static boolean isBlank(String str) {
-        return ApacheStringUtils.isBlank(str);
+        return StringUtils.isBlank(str);
     }
 
     /**
      * Checks if a string is not blank.
      */
     public static boolean isNotBlank(String str) {
-        return ApacheStringUtils.isNotBlank(str);
+        return StringUtils.isNotBlank(str);
     }
 
     /**

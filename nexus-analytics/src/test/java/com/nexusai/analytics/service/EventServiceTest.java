@@ -74,7 +74,7 @@ class EventServiceTest {
                     .eventCategory("navigation")
                     .eventAction("view")
                     .eventLabel("home")
-                    .sessionId(sessionId)
+                    .sessionId(sessionId.toString())
                     .build();
 
             AnalyticsEvent savedEvent = AnalyticsEvent.builder()

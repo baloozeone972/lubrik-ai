@@ -71,14 +71,14 @@ class ConversationServiceTest {
         conversationId = UUID.randomUUID();
 
         testCompanion = Companion.builder()
-                .id(companionId)
+               // .id(companionId)
                 .userId(userId)
                 .name("Test Companion")
                 .avatarUrl("https://example.com/avatar.png")
                 .build();
 
         testConversation = Conversation.builder()
-                .id(conversationId)
+               // .id(conversationId)
                 .userId(userId)
                 .companionId(companionId)
                 .title("Test Conversation")
@@ -229,7 +229,7 @@ class ConversationServiceTest {
         @DisplayName("Should return messages for conversation")
         void shouldReturnMessagesForConversation() {
             Message message = Message.builder()
-                    .id(UUID.randomUUID())
+                    //.id(UUID.randomUUID())
                     .conversationId(conversationId)
                     .role(MessageRole.USER)
                     .type(MessageType.TEXT)
@@ -391,7 +391,7 @@ class ConversationServiceTest {
         void shouldSearchMessagesInConversation() {
             Pageable pageable = PageRequest.of(0, 10);
             Message message = Message.builder()
-                    .id(UUID.randomUUID())
+                   // .id(UUID.randomUUID())
                     .conversationId(conversationId)
                     .role(MessageRole.USER)
                     .type(MessageType.TEXT)

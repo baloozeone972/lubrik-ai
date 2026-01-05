@@ -54,7 +54,7 @@ class AuthenticationServiceTest {
     void setUp() {
         userId = UUID.randomUUID();
         testUser = User.builder()
-                .id(userId)
+        //.id(userId)
                 .email("test@example.com")
                 .username("testuser")
                 .passwordHash("$2a$10$hashedpassword")
@@ -144,7 +144,7 @@ class AuthenticationServiceTest {
             when(jwtTokenProvider.generateAccessToken(any(), anyString(), anyString())).thenReturn("accessToken");
             when(jwtTokenProvider.generateRefreshToken(any())).thenReturn("refreshToken");
 
-            AuthResponse result = authenticationService.login(request);
+            AuthResponse result = authenticationService.authenticate(request);
 
             assertThat(result).isNotNull();
             assertThat(result.getAccessToken()).isEqualTo("accessToken");
@@ -160,7 +160,7 @@ class AuthenticationServiceTest {
 
             when(userRepository.findByEmail("nonexistent@example.com")).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> authenticationService.login(request))
+            assertThatThrownBy(() -> authenticationService.authenticate(request))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Invalid");
         }
@@ -175,7 +175,7 @@ class AuthenticationServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
             when(passwordEncoder.matches("wrongPassword", testUser.getPasswordHash())).thenReturn(false);
 
-            assertThatThrownBy(() -> authenticationService.login(request))
+            assertThatThrownBy(() -> authenticationService.authenticate(request))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Invalid");
         }
@@ -191,7 +191,7 @@ class AuthenticationServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
             when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
 
-            assertThatThrownBy(() -> authenticationService.login(request))
+            assertThatThrownBy(() -> authenticationService.authenticate(request))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("suspended");
         }
