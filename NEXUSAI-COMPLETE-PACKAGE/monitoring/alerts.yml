@@ -1,0 +1,143 @@
+groups:
+  - name: nexusai_alerts
+    interval: 30s
+    rules:
+      # API Health
+      - alert: APIDown
+        expr: up{job="nexusai-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NexusAI API is down"
+          description: "API has been down for more than 1 minute"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_server_requests_seconds_count{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # Database Connection Issues
+      - alert: DatabaseConnectionPoolExhausted
+        expr: hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Connection pool usage is {{ $value | humanizePercentage }}"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: process_cpu_usage > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Heap memory usage is {{ $value | humanizePercentage }}"
+
+      # Disk Space Low
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space running low"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"
+
+      # Redis Down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+
+      # PostgreSQL Down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
+
+      # Too Many Open Connections
+      - alert: TooManyDatabaseConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Too many database connections"
+          description: "Currently {{ $value }} active connections"
+
+      # AI API Rate Limit
+      - alert: AIApiRateLimitNearlyReached
+        expr: rate(ai_api_requests_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI API rate limit nearly reached"
+          description: "Current rate: {{ $value }} requests/second"
+
+      # Failed AI Requests
+      - alert: HighAIRequestFailureRate
+        expr: rate(ai_api_requests_failed_total[5m]) / rate(ai_api_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High AI request failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
+
+      # Stripe Webhook Failures
+      - alert: StripeWebhookFailures
+        expr: rate(stripe_webhook_failures_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stripe webhook failures detected"
+          description: "Failure rate: {{ $value }} failures/second"
+
+      # Media Upload Failures
+      - alert: HighMediaUploadFailureRate
+        expr: rate(media_upload_failures_total[5m]) / rate(media_upload_total[5m]) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High media upload failure rate"
+          description: "Failure rate is {{ $value | humanizePercentage }}"
