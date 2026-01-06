@@ -17,6 +17,8 @@ import com.nexusai.core.repository.MessageRepository;
 import com.nexusai.moderation.service.ContentFilterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -25,8 +27,21 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Service for managing conversation messages with AI integration.
+ *
+ * Features:
+ * - Send messages with content moderation
+ * - Generate AI responses
+ * - Stream AI responses in real-time (Reactive)
+ * - Context management
+ * - Token counting and tracking
+ *
+ * @author NexusAI Team
+ * @since 1.0.0
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -41,8 +56,18 @@ public class MessageService {
 
     private static final int CONTEXT_MESSAGE_LIMIT = 20;
 
+    /**
+     * Send a user message (without generating AI response).
+     *
+     * @param conversationId Conversation ID
+     * @param userId User ID
+     * @param request Message request
+     * @return Saved message DTO
+     */
     @Transactional
     public MessageDTO sendMessage(UUID conversationId, UUID userId, SendMessageRequest request) {
+        log.debug("Sending message from user {} to conversation {}", userId, conversationId);
+
         Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId.toString()));
 
@@ -69,8 +94,17 @@ public class MessageService {
         return mapToDTO(userMessage);
     }
 
+    /**
+     * Generate AI response for the last user message.
+     *
+     * @param conversationId Conversation ID
+     * @param userId User ID
+     * @return AI message DTO
+     */
     @Transactional
     public MessageDTO generateResponse(UUID conversationId, UUID userId) {
+        log.debug("Generating AI response for conversation {}", conversationId);
+
         Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId.toString()));
 
@@ -113,7 +147,90 @@ public class MessageService {
         return mapToDTO(aiMessage);
     }
 
+    /**
+     * Stream a message with AI response in real-time.
+     * This method saves the user message first, then streams the AI response.
+     * Returns Flux<String> for SSE (Server-Sent Events) compatibility.
+     *
+     * @param conversationId Conversation ID
+     * @param userId User ID
+     * @param request Message request
+     * @return Flux of response text chunks (String)
+     */
+    public Flux<String> streamMessage(UUID conversationId, UUID userId, SendMessageRequest request) {
+        log.info("Starting message stream for conversation: {} by user: {}", conversationId, userId);
+
+        return Mono.fromCallable(() -> {
+                    // Validate conversation ownership
+                    Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, userId)
+                            .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId.toString()));
+
+                    // Content moderation check
+                    if (!contentFilterService.isContentSafe(request.getContent())) {
+                        throw new BusinessException("CONTENT_BLOCKED", "Message contains inappropriate content");
+                    }
+
+                    // Save user message
+                    Message userMessage = Message.builder()
+                            .conversationId(conversationId)
+                            .role(MessageRole.USER)
+                            .type(parseMessageType(request.getType()))
+                            .content(request.getContent())
+                            .parentMessageId(request.getParentMessageId())
+                            .build();
+
+                    messageRepository.save(userMessage);
+                    conversationRepository.incrementMessageCount(conversationId, LocalDateTime.now());
+
+                    // Get companion and context for AI response
+                    Companion companion = companionRepository.findById(conversation.getCompanionId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Companion", conversation.getCompanionId().toString()));
+
+                    List<Message> contextMessages = messageRepository.findRecentMessages(conversationId, CONTEXT_MESSAGE_LIMIT);
+                    String context = contextService.buildContext(conversationId, contextMessages);
+
+                    return new StreamContext(conversation, companion, context);
+                })
+                .flatMapMany(ctx -> {
+                    // Stream AI response
+                    AtomicReference<StringBuilder> fullResponse = new AtomicReference<>(new StringBuilder());
+
+                    return aiProviderService.streamResponse(
+                                    ctx.companion.getSystemPrompt(),
+                                    ctx.context,
+                                    ctx.companion.getModelProvider(),
+                                    ctx.companion.getModelName()
+                            )
+                            .doOnNext(chunk -> fullResponse.get().append(chunk))
+                            .doOnComplete(() -> {
+                                // Save complete AI message after streaming completes
+                                try {
+                                    String completeResponse = fullResponse.get().toString();
+                                    int tokens = aiProviderService.estimateTokens(completeResponse);
+
+                                    saveStreamedMessage(conversationId, completeResponse, tokens);
+
+                                    log.info("Streaming completed for conversation {}, total tokens: {}",
+                                            conversationId, tokens);
+                                } catch (Exception e) {
+                                    log.error("Error saving streamed message for conversation {}", conversationId, e);
+                                }
+                            })
+                            .doOnError(e -> log.error("Stream error for conversation: {}", conversationId, e));
+                });
+    }
+
+    /**
+     * Stream AI response for existing conversation (without saving new user message).
+     * Returns Flux<StreamChunk> for WebSocket compatibility.
+     *
+     * @param conversationId Conversation ID
+     * @param userId User ID
+     * @return Flux of stream chunks
+     */
     public Flux<StreamChunk> streamResponse(UUID conversationId, UUID userId) {
+        log.debug("Streaming response for conversation {}", conversationId);
+
         return Mono.fromCallable(() -> {
             Conversation conversation = conversationRepository.findByIdAndUserId(conversationId, userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId.toString()));
@@ -136,6 +253,7 @@ public class MessageService {
                     ctx.companion.getModelName()
             ).map(chunk -> {
                 fullResponse.append(chunk);
+                // CORRECTED: StreamChunk.text takes 3 params: messageId, conversationId, content
                 return StreamChunk.text(messageId, conversationId, chunk);
             }).concatWith(Mono.defer(() -> {
                 // Save complete message
@@ -149,12 +267,39 @@ public class MessageService {
         });
     }
 
+    /**
+     * Get messages for a conversation with pagination.
+     *
+     * @param conversationId Conversation ID
+     * @param userId User ID
+     * @param pageable Pagination parameters
+     * @return Page of messages
+     */
+    @Transactional(readOnly = true)
+    public Page<MessageDTO> getMessages(UUID conversationId, UUID userId, Pageable pageable) {
+        // Verify conversation ownership
+        conversationRepository.findByIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId.toString()));
+
+        // CORRECTED: Use the correct method name
+        Page<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtDesc(conversationId, pageable);
+        return messages.map(this::mapToDTO);
+    }
+
+    /**
+     * Edit a message.
+     *
+     * @param messageId Message ID
+     * @param userId User ID
+     * @param newContent New content
+     * @return Updated message DTO
+     */
     @Transactional
     public MessageDTO editMessage(UUID messageId, UUID userId, String newContent) {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Message", messageId.toString()));
 
-        // Verify ownership via conversation
+        // Verify ownership
         final UUID msgConversationId = message.getConversationId();
         conversationRepository.findByIdAndUserId(msgConversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", msgConversationId.toString()));
@@ -163,6 +308,7 @@ public class MessageService {
             throw new BusinessException("EDIT_NOT_ALLOWED", "Only user messages can be edited");
         }
 
+        // Content moderation
         if (!contentFilterService.isContentSafe(newContent)) {
             throw new BusinessException("CONTENT_BLOCKED", "Message contains inappropriate content");
         }
@@ -171,22 +317,34 @@ public class MessageService {
         message.setIsEdited(true);
         Message savedMessage = messageRepository.save(message);
 
-        log.info("Message {} edited by user", messageId);
+        log.info("Message {} edited by user {}", messageId, userId);
         return mapToDTO(savedMessage);
     }
 
+    /**
+     * Delete a message.
+     *
+     * @param messageId Message ID
+     * @param userId User ID
+     */
     @Transactional
     public void deleteMessage(UUID messageId, UUID userId) {
         Message message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Message", messageId.toString()));
 
+        // Verify ownership
         conversationRepository.findByIdAndUserId(message.getConversationId(), userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", message.getConversationId().toString()));
 
         messageRepository.delete(message);
-        log.info("Message {} deleted by user", messageId);
+        log.info("Message {} deleted by user {}", messageId, userId);
     }
 
+    // ========== PRIVATE HELPER METHODS ==========
+
+    /**
+     * Save a streamed AI message after streaming completes.
+     */
     @Transactional
     protected void saveStreamedMessage(UUID conversationId, String content, int tokens) {
         Message message = Message.builder()
@@ -206,6 +364,9 @@ public class MessageService {
         }
     }
 
+    /**
+     * Parse message type from string.
+     */
     private MessageType parseMessageType(String type) {
         if (type == null) return MessageType.TEXT;
         try {
@@ -215,6 +376,9 @@ public class MessageService {
         }
     }
 
+    /**
+     * Convert Message entity to DTO.
+     */
     private MessageDTO mapToDTO(Message message) {
         return MessageDTO.builder()
                 .id(message.getId())
@@ -230,5 +394,8 @@ public class MessageService {
                 .build();
     }
 
+    /**
+     * Internal record for streaming context.
+     */
     private record StreamContext(Conversation conversation, Companion companion, String context) {}
 }

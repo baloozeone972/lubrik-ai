@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusai.analytics.dto.AnalyticsEventDTO;
 import com.nexusai.analytics.dto.TrackEventRequest;
 import com.nexusai.analytics.entity.AnalyticsEvent;
-import com.nexusai.analytics.repository.AnalyticsEventRepository;
+import com.nexusai.core.repository.AnalyticsEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
