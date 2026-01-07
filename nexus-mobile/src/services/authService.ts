@@ -1,23 +1,26 @@
-import api from './api';
-import type { AuthResponse, LoginRequest, RegisterRequest } from '@/types';
+import { apiClient } from './api'
+import * as SecureStore from 'expo-secure-store'
 
 export const authService = {
-  async login(data: LoginRequest): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/login', data);
-    return response.data;
+  async login(email: string, password: string) {
+    const response = await apiClient.post('/auth/login', { email, password })
+    await SecureStore.setItemAsync('accessToken', response.data.accessToken)
+    return response.data
   },
 
-  async register(data: RegisterRequest): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/register', data);
-    return response.data;
+  async register(email: string, username: string, password: string) {
+    const response = await apiClient.post('/auth/register', { email, username, password })
+    await SecureStore.setItemAsync('accessToken', response.data.accessToken)
+    return response.data
   },
 
-  async refresh(refreshToken: string): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/refresh', { refreshToken });
-    return response.data;
+  async logout() {
+    await apiClient.post('/auth/logout')
+    await SecureStore.deleteItemAsync('accessToken')
   },
 
-  async logout(refreshToken: string): Promise<void> {
-    await api.post('/auth/logout', { refreshToken });
+  async getCurrentUser() {
+    const response = await apiClient.get('/auth/me')
+    return response.data
   },
-};
+}

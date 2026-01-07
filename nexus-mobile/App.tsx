@@ -1,11 +1,9 @@
-import React, { useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useAuthStore } from '@/store/authStore';
-import { RootNavigator } from '@/navigation/RootNavigator';
+import React from 'react'
+import { StatusBar } from 'expo-status-bar'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { RootNavigator } from './src/navigation/RootNavigator'
+import { useAuthStore } from './src/store/authStore'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -14,25 +12,21 @@ const queryClient = new QueryClient({
       retry: 1,
     },
   },
-});
+})
 
 export default function App() {
-  const { loadStoredAuth } = useAuthStore();
+  const { initialize } = useAuthStore()
 
-  useEffect(() => {
-    loadStoredAuth();
-  }, []);
+  React.useEffect(() => {
+    initialize()
+  }, [])
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <NavigationContainer>
-            <StatusBar style="auto" />
-            <RootNavigator />
-          </NavigationContainer>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
-  );
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <RootNavigator />
+        <StatusBar style="auto" />
+      </QueryClientProvider>
+    </SafeAreaProvider>
+  )
 }
