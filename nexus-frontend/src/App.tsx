@@ -1,90 +1,20 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
-import { useAuthStore } from '@/store/authStore'
-import { ProtectedRoute } from '@/components/layout'
-import {
-  Login,
-  Register,
-  Dashboard,
-  Chat,
-  Companions,
-  CompanionForm,
-  Conversations,
-} from '@/pages'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-export default function App() {
-  const { isAuthenticated, setLoading } = useAuthStore()
+const queryClient = new QueryClient()
 
-  useEffect(() => {
-    // Check if we have stored auth on mount
-    setLoading(false)
-  }, [setLoading])
-
+function App() {
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route
-        path="/login"
-        element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />}
-      />
-      <Route
-        path="/register"
-        element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />}
-      />
-
-      {/* Protected routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/companions"
-        element={
-          <ProtectedRoute>
-            <Companions />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/companions/new"
-        element={
-          <ProtectedRoute>
-            <CompanionForm />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/companions/:id/edit"
-        element={
-          <ProtectedRoute>
-            <CompanionForm />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/conversations"
-        element={
-          <ProtectedRoute>
-            <Conversations />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/chat/:conversationId"
-        element={
-          <ProtectedRoute>
-            <Chat />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" />} />
-      <Route path="*" element={<Navigate to="/dashboard" />} />
-    </Routes>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <div className="min-h-screen bg-gray-50">
+          <Routes>
+            <Route path="/" element={<div className="p-8 text-center"><h1 className="text-4xl font-bold text-blue-600">NexusAI Frontend</h1><p className="mt-4 text-gray-600">Installation réussie! ✅</p></div>} />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
+
+export default App
