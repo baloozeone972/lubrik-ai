@@ -1,56 +1,23 @@
-import React from 'react'
-import { View, StyleSheet, ViewStyle, TouchableOpacity } from 'react-native'
+import React, { ReactNode } from 'react'
+import { View, StyleSheet } from 'react-native'
 
 interface CardProps {
-  children: React.ReactNode
-  style?: ViewStyle
-  padding?: 'none' | 'sm' | 'md' | 'lg'
-  onPress?: () => void
+  children: ReactNode
 }
 
-export const Card: React.FC<CardProps> = ({
-  children,
-  style,
-  padding = 'md',
-  onPress,
-}) => {
-  const cardStyle: ViewStyle = {
-    ...styles.base,
-    ...styles[`padding_${padding}`],
-    ...style,
-  }
-
-  if (onPress) {
-    return (
-      <TouchableOpacity style={cardStyle} onPress={onPress} activeOpacity={0.7}>
-        {children}
-      </TouchableOpacity>
-    )
-  }
-
-  return <View style={cardStyle}>{children}</View>
+export const Card = ({ children }: CardProps) => {
+  return <View style={styles.card}>{children}</View>
 }
 
 const styles = StyleSheet.create({
-  base: {
+  card: {
     backgroundColor: '#FFF',
     borderRadius: 12,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  padding_none: {
-    padding: 0,
-  },
-  padding_sm: {
-    padding: 12,
-  },
-  padding_md: {
-    padding: 16,
-  },
-  padding_lg: {
-    padding: 24,
-  },
+    marginBottom: 12
+  }
 })

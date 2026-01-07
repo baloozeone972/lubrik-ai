@@ -4,7 +4,6 @@ export const validation = {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Email invalide'
     return undefined
   },
-  
   password: (value: string) => {
     if (!value) return 'Mot de passe requis'
     if (value.length < 8) return 'Minimum 8 caractères'
@@ -13,7 +12,6 @@ export const validation = {
     if (!/[0-9]/.test(value)) return 'Un chiffre requis'
     return undefined
   },
-  
   required: (value: string) => {
     if (!value?.trim()) return 'Ce champ est requis'
     return undefined

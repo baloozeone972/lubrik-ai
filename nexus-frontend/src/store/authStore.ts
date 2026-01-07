@@ -1,71 +1,64 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User, AuthResponse } from '@/types'
+import { authService } from '@/services/authService'
+import type { User } from '@/types/auth.types'
 
 interface AuthState {
   user: User | null
-  accessToken: string | null
-  refreshToken: string | null
   isAuthenticated: boolean
   isLoading: boolean
-
-  setAuth: (response: AuthResponse) => void
-  setUser: (user: User) => void
-  setTokens: (accessToken: string, refreshToken: string) => void
-  setLoading: (loading: boolean) => void
-  logout: () => void
+  error: string | null
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, username: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  clearError: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
-      isLoading: true,
+      isLoading: false,
+      error: null,
 
-      setAuth: (response: AuthResponse) =>
-        set({
-          user: {
-            id: response.userId,
-            username: response.username,
-            email: response.email,
-            role: response.role as User['role'],
-            emailVerified: response.emailVerified,
-            subscriptionType: 'FREE',
-            createdAt: new Date().toISOString(),
-          },
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-          isAuthenticated: true,
-          isLoading: false,
-        }),
+      login: async (email, password) => {
+        set({ isLoading: true, error: null })
+        try {
+          const data = await authService.login({ email, password })
+          set({ user: data.user, isAuthenticated: true, isLoading: false })
+        } catch (error: any) {
+          set({ 
+            error: error.response?.data?.message || 'Erreur de connexion',
+            isLoading: false
+          })
+        }
+      },
 
-      setUser: (user: User) => set({ user }),
+      register: async (email, username, password) => {
+        set({ isLoading: true, error: null })
+        try {
+          const data = await authService.register({ email, username, password })
+          set({ user: data.user, isAuthenticated: true, isLoading: false })
+        } catch (error: any) {
+          set({ 
+            error: error.response?.data?.message || "Erreur d'inscription",
+            isLoading: false
+          })
+        }
+      },
 
-      setTokens: (accessToken: string, refreshToken: string) =>
-        set({ accessToken, refreshToken }),
+      logout: async () => {
+        try {
+          await authService.logout()
+          set({ user: null, isAuthenticated: false })
+        } catch (error) {
+          console.error('Logout error:', error)
+        }
+      },
 
-      setLoading: (isLoading: boolean) => set({ isLoading }),
-
-      logout: () =>
-        set({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          isLoading: false,
-        }),
+      clearError: () => set({ error: null })
     }),
-    {
-      name: 'nexus-auth',
-      partialize: (state) => ({
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
+    { name: 'auth-storage' }
   )
 )

@@ -1,39 +1,28 @@
-import api from './api'
-import type { Companion, CreateCompanionRequest, UpdateCompanionRequest, PaginatedResponse } from '@/types'
+import { apiClient } from './api'
+import type { Companion, CreateCompanionRequest } from '@/types/companion.types'
 
 export const companionService = {
-  async getAll(page = 0, size = 10): Promise<PaginatedResponse<Companion>> {
-    const response = await api.get<PaginatedResponse<Companion>>('/companions', {
-      params: { page, size },
-    })
+  async getAll(): Promise<Companion[]> {
+    const response = await apiClient.get('/companions')
     return response.data
   },
 
   async getById(id: string): Promise<Companion> {
-    const response = await api.get<Companion>(`/companions/${id}`)
+    const response = await apiClient.get(`/companions/${id}`)
     return response.data
   },
 
   async create(data: CreateCompanionRequest): Promise<Companion> {
-    const response = await api.post<Companion>('/companions', data)
+    const response = await apiClient.post('/companions', data)
     return response.data
   },
 
-  async update(id: string, data: UpdateCompanionRequest): Promise<Companion> {
-    const response = await api.put<Companion>(`/companions/${id}`, data)
+  async update(id: string, data: Partial<CreateCompanionRequest>): Promise<Companion> {
+    const response = await apiClient.put(`/companions/${id}`, data)
     return response.data
   },
 
   async delete(id: string): Promise<void> {
-    await api.delete(`/companions/${id}`)
-  },
-
-  async uploadAvatar(id: string, file: File): Promise<Companion> {
-    const formData = new FormData()
-    formData.append('file', file)
-    const response = await api.post<Companion>(`/companions/${id}/avatar`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-    return response.data
-  },
+    await apiClient.delete(`/companions/${id}`)
+  }
 }
