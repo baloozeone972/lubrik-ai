@@ -20,6 +20,12 @@
             <groupId>com.nexusai</groupId>
             <artifactId>nexus-core</artifactId>
         </dependency>
+        <!-- Spring Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
 
         <!-- Spring Web -->
         <dependency>

@@ -10,23 +10,24 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * DTO for analytics events.
+ * DTO for tracking analytics events.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class EventDTO {
-
-    private UUID id;
     private UUID userId;
     private String sessionId;
     private String eventType;
     private String eventCategory;
+    private String eventAction;
+    private String eventLabel;
+    private Double eventValue;
     private Map<String, Object> eventData;
     private String ipAddress;
     private String userAgent;
     private String platform;
     private String deviceType;
-    private LocalDateTime createdAt;
+    private LocalDateTime timestamp;
 }

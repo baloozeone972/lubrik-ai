@@ -17,9 +17,11 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
- * Service de collecte et analyse d'événements analytics.
+ * Service for analytics and metrics (platform-wide).
+ * Uses core AnalyticsEvent entity (timestamp field).
  */
 @Slf4j
 @Service
@@ -35,7 +37,7 @@ public class AnalyticsService {
     private static final String REDIS_METRICS_PREFIX = "metrics:";
 
     /**
-     * Track un événement de manière asynchrone.
+     * Track an event asynchronously.
      */
     @Async
     public void trackEventAsync(EventDTO event) {
@@ -47,14 +49,14 @@ public class AnalyticsService {
     }
 
     /**
-     * Track un événement.
+     * Track an event.
      */
     @Transactional
     public void trackEvent(EventDTO event) {
         log.debug("Tracking event: {} for user: {}", event.getEventType(), event.getUserId());
 
         try {
-            // Créer l'événement
+            // Create event
             AnalyticsEvent analyticsEvent = AnalyticsEvent.builder()
                     .userId(event.getUserId())
                     .sessionId(event.getSessionId())
@@ -67,11 +69,11 @@ public class AnalyticsService {
                     .deviceType(event.getDeviceType())
                     .build();
 
-            // Sauvegarder en DB (asynchrone via Kafka)
+            // Save to DB (async via Kafka)
             String eventJson = objectMapper.writeValueAsString(analyticsEvent);
             kafkaTemplate.send(KAFKA_TOPIC, event.getUserId().toString(), eventJson);
 
-            // Mettre à jour les métriques temps réel en Redis
+            // Update real-time metrics in Redis
             updateRealtimeMetrics(event);
 
             log.debug("Event tracked successfully: {}", event.getEventType());
@@ -82,31 +84,31 @@ public class AnalyticsService {
     }
 
     /**
-     * Met à jour les métriques temps réel dans Redis.
+     * Update real-time metrics in Redis.
      */
     private void updateRealtimeMetrics(EventDTO event) {
         String date = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS).toString();
-        
-        // Incrémenter compteurs globaux
+
+        // Increment global counters
         redisTemplate.opsForValue().increment(REDIS_METRICS_PREFIX + "events:total:" + date);
         redisTemplate.opsForValue().increment(
                 REDIS_METRICS_PREFIX + "events:" + event.getEventType() + ":" + date);
-        
-        // Incrémenter compteurs utilisateur
+
+        // Increment user counters
         redisTemplate.opsForValue().increment(
                 REDIS_METRICS_PREFIX + "user:" + event.getUserId() + ":events:" + date);
-        
-        // Ajouter utilisateur actif du jour (Set)
+
+        // Add active user (Set)
         redisTemplate.opsForSet().add(
-                REDIS_METRICS_PREFIX + "active_users:" + date, 
+                REDIS_METRICS_PREFIX + "active_users:" + date,
                 event.getUserId().toString());
-        
-        // Expiration 30 jours
+
+        // Set expiration (30 days)
         redisTemplate.expire(REDIS_METRICS_PREFIX + "events:total:" + date, 30, TimeUnit.DAYS);
     }
 
     /**
-     * Récupère les métriques d'un utilisateur.
+     * Get user metrics.
      */
     public MetricsDTO getUserMetrics(UUID userId, LocalDateTime startDate, LocalDateTime endDate) {
         log.info("Fetching metrics for user: {} from {} to {}", userId, startDate, endDate);
@@ -119,15 +121,15 @@ public class AnalyticsService {
         int totalTokensUsed = 0;
 
         for (AnalyticsEvent event : events) {
-            // Compter par type d'événement
+            // Count by event type
             eventCounts.merge(event.getEventType(), 1L, Long::sum);
 
-            // Compter messages
+            // Count messages
             if (event.isMessageEvent()) {
                 totalMessages++;
             }
 
-            // Parser les données pour tokens
+            // Parse data for tokens
             if ("message_sent".equals(event.getEventType()) && event.getEventData() != null) {
                 try {
                     Map<String, Object> data = objectMapper.readValue(
@@ -142,7 +144,7 @@ public class AnalyticsService {
         }
 
         return MetricsDTO.builder()
-                .userId(userId)
+                // ← CORRECTION: Pas de userId() ici
                 .startDate(startDate)
                 .endDate(endDate)
                 .totalEvents(events.size())
@@ -154,26 +156,31 @@ public class AnalyticsService {
     }
 
     /**
-     * Récupère les métriques globales de la plateforme.
+     * Get platform metrics.
      */
     public Map<String, Object> getPlatformMetrics(LocalDateTime startDate, LocalDateTime endDate) {
         log.info("Fetching platform metrics from {} to {}", startDate, endDate);
 
         Map<String, Object> metrics = new HashMap<>();
 
-        // Total utilisateurs actifs
+        // Active users
         long activeUsers = eventRepository.countDistinctUsersByTimestampBetween(startDate, endDate);
         metrics.put("active_users", activeUsers);
 
-        // Total événements
+        // Total events
         long totalEvents = eventRepository.countByTimestampBetween(startDate, endDate);
         metrics.put("total_events", totalEvents);
 
-        // Événements par type
-        Map<String, Long> eventsByType = eventRepository.countEventsByType(startDate, endDate);
+        // Events by type - CORRECTION: Conversion List<Map> → Map<String, Long>
+        List<Map<String, Object>> eventTypesList = eventRepository.countEventsByType(startDate, endDate);
+        Map<String, Long> eventsByType = eventTypesList.stream()
+                .collect(Collectors.toMap(
+                        m -> (String) m.get("type"),
+                        m -> ((Number) m.get("count")).longValue()
+                ));
         metrics.put("events_by_type", eventsByType);
 
-        // Métriques temps réel depuis Redis
+        // Real-time metrics from Redis
         String today = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS).toString();
         Long todayEvents = (Long) redisTemplate.opsForValue().get(
                 REDIS_METRICS_PREFIX + "events:total:" + today);
@@ -187,28 +194,28 @@ public class AnalyticsService {
     }
 
     /**
-     * Récupère les top événements.
+     * Get top events.
      */
     public List<Map<String, Object>> getTopEvents(LocalDateTime startDate, LocalDateTime endDate, int limit) {
         return eventRepository.findTopEventTypes(startDate, endDate, limit);
     }
 
     /**
-     * Récupère les utilisateurs les plus actifs.
+     * Get top users.
      */
     public List<Map<String, Object>> getTopUsers(LocalDateTime startDate, LocalDateTime endDate, int limit) {
         return eventRepository.findTopUsers(startDate, endDate, limit);
     }
 
     /**
-     * Récupère les métriques de conversion.
+     * Get conversion metrics.
      */
     public Map<String, Object> getConversionMetrics(LocalDateTime startDate, LocalDateTime endDate) {
         long totalUsers = eventRepository.countDistinctUsersByTimestampBetween(startDate, endDate);
-        
+
         long conversions = eventRepository.countByEventTypeAndTimestampBetween(
                 "subscription_created", startDate, endDate);
-        
+
         double conversionRate = totalUsers > 0 ? (double) conversions / totalUsers : 0;
 
         Map<String, Object> metrics = new HashMap<>();
@@ -220,7 +227,7 @@ public class AnalyticsService {
     }
 
     /**
-     * Récupère les événements par heure (dernières 24h).
+     * Get events by hour (last 24h).
      */
     public List<Map<String, Object>> getEventsByHour() {
         LocalDateTime endDate = LocalDateTime.now();
@@ -229,9 +236,8 @@ public class AnalyticsService {
         return eventRepository.countEventsByHour(startDate, endDate);
     }
 
-    /**
-     * Événements prédéfinis.
-     */
+    // ========== PREDEFINED EVENT TRACKING ==========
+
     public void trackUserLogin(UUID userId, String ipAddress, String userAgent) {
         trackEventAsync(EventDTO.builder()
                 .userId(userId)
@@ -293,19 +299,17 @@ public class AnalyticsService {
                 .build());
     }
 
-    /**
-     * Calcule la moyenne par jour.
-     */
+    // ========== PRIVATE HELPER METHODS ==========
+
     private double calculateAvgPerDay(int total, LocalDateTime start, LocalDateTime end) {
         long days = ChronoUnit.DAYS.between(start, end);
         return days > 0 ? (double) total / days : total;
     }
 
-    /**
-     * Sérialise les données d'événement.
-     */
     private String serializeEventData(Map<String, Object> data) {
-        if (data == null || data.isEmpty()) return null;
+        if (data == null || data.isEmpty()) {
+            return null;
+        }
         try {
             return objectMapper.writeValueAsString(data);
         } catch (Exception e) {

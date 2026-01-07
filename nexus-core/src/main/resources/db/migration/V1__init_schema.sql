@@ -40,7 +40,10 @@ CREATE TABLE users (
     last_login_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMP WITH TIME ZONE
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    stripe_customer_id VARCHAR(100),
+    stripe_subscription_id VARCHAR(100),
+
 );
 
 -- Indexes for users
@@ -48,6 +51,8 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_status ON users(account_status) WHERE account_status != 'DELETED';
 CREATE INDEX idx_users_subscription ON users(subscription_type);
+CREATE INDEX IF NOT EXISTS idx_users_stripe_customer ON users(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_users_stripe_subscription ON users(stripe_subscription_id);
 
 -- ────────────────────────────────────────────────────────────────
 -- Subscriptions Table

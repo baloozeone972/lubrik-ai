@@ -6,14 +6,17 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.UUID;
 
+/**
+ * DTO for returning analytics event data to clients.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class AnalyticsEventDTO {
+
     private UUID id;
     private UUID userId;
     private String sessionId;
@@ -22,6 +25,5 @@ public class AnalyticsEventDTO {
     private String eventAction;
     private String eventLabel;
     private Double eventValue;
-    private Map<String, Object> properties;
     private LocalDateTime createdAt;
 }

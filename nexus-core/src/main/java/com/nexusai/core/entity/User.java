@@ -16,9 +16,11 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "users", indexes = {
-    @Index(name = "idx_users_email", columnList = "email"),
-    @Index(name = "idx_users_username", columnList = "username"),
-    @Index(name = "idx_users_status", columnList = "account_status")
+        @Index(name = "idx_users_email", columnList = "email"),
+        @Index(name = "idx_users_username", columnList = "username"),
+        @Index(name = "idx_users_status", columnList = "account_status"),
+        @Index(name = "idx_users_stripe_customer", columnList = "stripe_customer_id"),
+        @Index(name = "idx_users_stripe_subscription", columnList = "stripe_subscription_id")
 })
 @Getter
 @Setter
@@ -87,6 +89,16 @@ public class User extends BaseEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    // ========== STRIPE FIELDS ==========
+
+    @Column(name = "stripe_customer_id", length = 100)
+    private String stripeCustomerId;
+
+    @Column(name = "stripe_subscription_id", length = 100)
+    private String stripeSubscriptionId;
+
+    // ===================================
+
     /**
      * Checks if the user has an active subscription.
      */
@@ -104,42 +116,32 @@ public class User extends BaseEntity {
     /**
      * Consumes tokens from the user's balance.
      */
-    public boolean consumeTokens(int amount) {
+    public void consumeTokens(int amount) {
         if (subscriptionType == SubscriptionType.VIP_PLUS) {
-            return true; // Unlimited
+            return; // VIP+ has unlimited tokens
         }
-        if (tokensRemaining >= amount) {
-            tokensRemaining -= amount;
-            return true;
-        }
-        return false;
+        this.tokensRemaining = Math.max(0, this.tokensRemaining - amount);
     }
 
     /**
      * Adds tokens to the user's balance.
      */
     public void addTokens(int amount) {
-        tokensRemaining += amount;
+        this.tokensRemaining += amount;
     }
 
     /**
-     * Checks if the user is active.
+     * Checks if the user account is active.
      */
     public boolean isActive() {
-        return accountStatus == AccountStatus.ACTIVE && deletedAt == null;
+        return accountStatus == AccountStatus.ACTIVE;
     }
 
     /**
-     * Checks if the user is an admin.
+     * Marks the user as deleted (soft delete).
      */
-    public boolean isAdmin() {
-        return role == UserRole.ADMIN;
-    }
-
-    /**
-     * Checks if the user is a moderator or admin.
-     */
-    public boolean isModerator() {
-        return role == UserRole.MODERATOR || role == UserRole.ADMIN;
+    public void markDeleted() {
+        this.accountStatus = AccountStatus.DELETED;
+        this.deletedAt = LocalDateTime.now();
     }
 }
